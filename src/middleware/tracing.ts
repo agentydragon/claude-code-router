@@ -213,5 +213,5 @@ function sanitizeObject(obj: any, depth = 0): void {
   }
 }
 
-// Export sanitization functions for use in interceptor
+// Export sanitization functions for use in transformer
 export { sanitizeHeaders, sanitizeBody };
