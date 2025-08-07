@@ -8,6 +8,7 @@ import { setupTracingHooks, maintainTraceContext } from "./middleware/tracing";
 import { initializeTracer } from "./utils/tracer";
 import { wrapFetch } from "./tracing/interceptor";
 import { OpenAIReasoningTransformer } from "./transformers/OpenAIReasoningTransformer";
+import { SystemMessageTransformer, ClaudeToOpenAITransformer } from "./transformers/SystemMessageTransformer";
 
 export const createServer = (config: any): Server => {
   // Initialize tracer with config FIRST
@@ -26,16 +27,30 @@ export const createServer = (config: any): Server => {
   
   // Register built-in transformers
   try {
-    const reasoningTransformer = new OpenAIReasoningTransformer();
-    // Access the transformer service and register our transformer
     if (server.app?._server?.transformerService) {
+      // Register OpenAI reasoning transformer
+      const reasoningTransformer = new OpenAIReasoningTransformer();
       server.app._server.transformerService.registerTransformer(
         reasoningTransformer.name,
         reasoningTransformer
       );
+      
+      // Register Claude to OpenAI transformer (example)
+      const claudeToOpenAI = new ClaudeToOpenAITransformer();
+      server.app._server.transformerService.registerTransformer(
+        claudeToOpenAI.name,
+        claudeToOpenAI
+      );
+      
+      // Register generic system-replace transformer
+      const systemReplace = new SystemMessageTransformer();
+      server.app._server.transformerService.registerTransformer(
+        systemReplace.name,
+        systemReplace
+      );
     }
   } catch (error) {
-    console.error('Failed to register OpenAI reasoning transformer:', error);
+    console.error('Failed to register built-in transformers:', error);
   }
 
   if (tracingEnabled) {
