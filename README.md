@@ -288,6 +288,25 @@ The `Providers` array is where you define the different model providers you want
 
 Transformers allow you to modify the request and response payloads to ensure compatibility with different provider APIs.
 
+##### Built-in Transformers
+
+Claude Code Router includes several built-in transformers:
+
+- **openai-reasoning**: Automatically applies compatibility fixes for OpenAI reasoning models (o1, o3):
+  - Converts `max_tokens` to `max_completion_tokens`
+  - Forces `temperature` to 1 (reasoning models don't support temperature control)
+  - Automatically activated for models starting with `o1` or `o3`
+
+- **openrouter**: Handles OpenRouter-specific API transformations
+- **deepseek**: Adapts requests for DeepSeek models
+- **gemini**: Converts to Google Gemini API format
+- **tooluse**: Enhances tool/function calling capabilities
+- **reasoning**: Optimizes for reasoning-focused models
+- **maxtoken**: Enforces token limits
+- **enhancetool**: Advanced tool enhancement
+
+##### Using Transformers
+
 - **Global Transformer**: Apply a transformer to all models from a provider. In this example, the `openrouter` transformer is applied to all models under the `openrouter` provider.
   ```json
   {
@@ -337,9 +356,155 @@ Transformers allow you to modify the request and response payloads to ensure com
   }
   ```
 
+##### Creating Custom Transformers
+
+You can create your own transformers to handle specific API requirements or add custom functionality.
+
+###### Option 1: External JavaScript File
+
+Create a transformer file (e.g., `my-transformer.js`):
+
+```javascript
+class MyCustomTransformer {
+  constructor(options = {}) {
+    // Required: transformer must have a name
+    this.name = 'my-custom-transformer';
+    this.options = options;
+    
+    // Optional: add an endpoint for this transformer
+    this.endPoint = '/v1/my-custom-endpoint';
+  }
+  
+  // Transform outbound request (to LLM provider)
+  transformRequestOut(request) {
+    // Modify the request as needed
+    if (request.temperature > 1.5) {
+      request.temperature = 1.5; // Cap temperature
+    }
+    return request;
+  }
+  
+  // Transform outbound response (from LLM provider)
+  async transformResponseOut(response) {
+    // Modify the response as needed
+    // Can be async if you need to process streaming responses
+    return response;
+  }
+  
+  // Optional: Transform inbound request (from client)
+  transformRequestIn(request) {
+    return request;
+  }
+  
+  // Optional: Transform inbound response (to client)
+  transformResponseIn(response) {
+    return response;
+  }
+}
+
+module.exports = MyCustomTransformer;
+```
+
+Then reference it in your `config.json`:
+
+```json
+{
+  "transformers": [
+    {
+      "path": "/absolute/path/to/my-transformer.js",
+      "options": {
+        "maxTemperature": 1.5,
+        "customSetting": "value"
+      }
+    }
+  ],
+  "Providers": [
+    {
+      "name": "myprovider",
+      "transformer": {
+        "use": ["my-custom-transformer"]
+      }
+    }
+  ]
+}
+```
+
+###### Option 2: TypeScript Transformer
+
+For TypeScript transformers (e.g., `my-transformer.ts`):
+
+```typescript
+interface TransformerOptions {
+  maxTemperature?: number;
+  debugMode?: boolean;
+}
+
+export class MyTypescriptTransformer {
+  name = 'my-ts-transformer';
+  private options: TransformerOptions;
+  
+  constructor(options: TransformerOptions = {}) {
+    this.options = options;
+  }
+  
+  transformRequestOut(request: any): any {
+    // Apply your transformations
+    if (this.options.debugMode) {
+      console.log('Outbound request:', request);
+    }
+    
+    // Example: Add custom headers
+    request.headers = {
+      ...request.headers,
+      'X-Custom-Header': 'my-value'
+    };
+    
+    return request;
+  }
+  
+  async transformResponseOut(response: Response): Promise<Response> {
+    // Handle Response objects or plain objects
+    if (response instanceof Response) {
+      // For streaming responses, you might need to clone
+      const cloned = response.clone();
+      // Process as needed...
+    }
+    return response;
+  }
+}
+```
+
+Compile to JavaScript before use, then reference the compiled `.js` file in config.
+
+###### Transformer Best Practices
+
+1. **Always include a `name` property** - This is required for the transformer to be registered
+2. **Handle different response types** - Responses might be `Response` objects or plain objects
+3. **Clone Response objects** - When reading Response bodies, clone first to avoid consuming the original
+4. **Make transformations idempotent** - Ensure running the transformer multiple times produces the same result
+5. **Handle errors gracefully** - Don't throw unless absolutely necessary; log and return original data instead
+6. **Support streaming** - Consider how your transformer handles streaming responses
+7. **Document options** - Clearly document what options your transformer accepts
+
 **Available Built-in Transformers:**
 
-- `Anthropic`:If you use only the `Anthropic` transformer, it will preserve the original request and response parameters(you can use it to connect directly to an Anthropic endpoint).
+- `Anthropic`: If you use only the `Anthropic` transformer, it will preserve the original request and response parameters (you can use it to connect directly to an Anthropic endpoint).
+- `openai-reasoning`: Automatically applies compatibility fixes for OpenAI reasoning models (o1, o3). This transformer:
+  - Converts `max_tokens` to `max_completion_tokens` (required by reasoning models)
+  - Forces `temperature` to 1 (reasoning models don't support temperature control)
+  - Automatically activates for models starting with `o1` or `o3`
+  - Example usage:
+    ```json
+    {
+      "name": "openai",
+      "api_base_url": "https://api.openai.com/v1/chat/completions",
+      "api_key": "sk-xxx",
+      "models": ["o1-preview", "o1-mini", "o3-mini"],
+      "transformer": {
+        "use": ["openai-reasoning"]
+      }
+    }
+    ```
 - `deepseek`: Adapts requests/responses for DeepSeek API.
 - `gemini`: Adapts requests/responses for Gemini API.
 - `openrouter`: Adapts requests/responses for OpenRouter API. It can also accept a `provider` routing parameter to specify which underlying providers OpenRouter should use. For more details, refer to the [OpenRouter documentation](https://openrouter.ai/docs/features/provider-routing). See an example below:

@@ -1,14 +1,16 @@
 import { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { TraceEvents, trace, captureErrorDetails } from '../utils/tracer';
-import { createTraceContext, getTraceContext, TraceContext, traceStorage } from '../tracing/context';
+import { createTraceContext, getTraceContext, traceStorage } from '../tracing/context';
 import { sanitizeHeaders, sanitizeBody } from '../tracing/sanitize';
+import type { TraceContext, RequestWithContext } from '../tracing/types';
 
 /**
  * Extracts or creates trace context for a request
  */
 function getOrCreateContext(req: FastifyRequest): TraceContext {
   // Check if context already exists on request
-  const existing = (req as any).traceContext as TraceContext | undefined;
+  const reqWithContext = req as RequestWithContext;
+  const existing = reqWithContext.traceContext;
   if (existing) return existing;
   
   // Create new context
@@ -16,8 +18,8 @@ function getOrCreateContext(req: FastifyRequest): TraceContext {
   const context = createTraceContext(sessionId);
   
   // Store on request for other hooks
-  (req as any).traceContext = context;
-  (req as any).traceStartTime = Date.now();
+  reqWithContext.traceContext = context;
+  reqWithContext.traceStartTime = Date.now();
   
   return context;
 }
@@ -50,7 +52,8 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
   // Log inbound response before sending
   fastify.addHook('onSend', async (req, reply, payload) => {
     const context = getTraceContext();
-    const startTime = (req as any).traceStartTime as number | undefined;
+    const reqWithContext = req as RequestWithContext;
+    const startTime = reqWithContext.traceStartTime;
     
     if (!context || !startTime) return payload;
     
@@ -66,7 +69,8 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
   // Log errors
   fastify.addHook('onError', async (req, _reply, error) => {
     const context = getTraceContext();
-    const startTime = (req as any).traceStartTime as number | undefined;
+    const reqWithContext = req as RequestWithContext;
+    const startTime = reqWithContext.traceStartTime;
     
     if (!context || !startTime) return;
     
@@ -81,7 +85,8 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
  * Middleware to re-establish context if lost (safety net)
  */
 export async function maintainTraceContext(req: FastifyRequest, _reply: FastifyReply): Promise<void> {
-  const context = (req as any).traceContext as TraceContext | undefined;
+  const reqWithContext = req as RequestWithContext;
+  const context = reqWithContext.traceContext;
   
   if (context && !getTraceContext()) {
     traceStorage.enterWith(context);

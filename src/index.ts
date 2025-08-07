@@ -73,7 +73,6 @@ async function run(options: RunOptions = {}) {
     cleanupPidFile();
     process.exit(0);
   });
-  console.log(HOST)
 
   // Use port from environment variable if set (for background process)
   const servicePort = process.env.SERVICE_PORT

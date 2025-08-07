@@ -1,17 +1,18 @@
 /**
  * Helper functions for log file paths
  */
+import { join } from 'path';
 
 /**
  * Generates the log file path for a given timestamp
  */
 export function getLogFilePath(baseDir: string, timestamp: Date = new Date()): string {
-  const year = timestamp.getFullYear();
+  const year = String(timestamp.getFullYear());
   const month = String(timestamp.getMonth() + 1).padStart(2, '0');
   const day = String(timestamp.getDate()).padStart(2, '0');
   const hour = String(timestamp.getHours()).padStart(2, '0');
   
-  return `${baseDir}/${year}/${month}/${day}/trace-${hour}.jsonl`;
+  return join(baseDir, year, month, day, `trace-${hour}.jsonl`);
 }
 
 /**
@@ -19,10 +20,10 @@ export function getLogFilePath(baseDir: string, timestamp: Date = new Date()): s
  */
 export function getRotatingLogPath(time?: Date): string {
   const now = time || new Date();
-  const year = now.getFullYear();
+  const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const hour = String(now.getHours()).padStart(2, '0');
   
-  return `${year}/${month}/${day}/trace-${hour}.jsonl`;
+  return join(year, month, day, `trace-${hour}.jsonl`);
 }

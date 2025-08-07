@@ -89,7 +89,7 @@ async function parseResponseBody(response: Response): Promise<any> {
     
     return text;
   } catch (error) {
-    // Don't throw - just return error indicator
+    console.error('[Tracing] Failed to read response body:', error);
     return { error: 'Failed to read response body', details: String(error) };
   }
 }

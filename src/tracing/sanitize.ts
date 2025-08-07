@@ -1,9 +1,10 @@
 import { tracingConfig } from '../utils/tracer';
+import type { SanitizedHeaders, SanitizedBody } from './types';
 
 /**
  * Sanitizes headers by redacting sensitive values
  */
-export function sanitizeHeaders(headers: any): Record<string, string> {
+export function sanitizeHeaders(headers: unknown): SanitizedHeaders {
   if (!headers || typeof headers !== 'object') return {};
   
   const sanitized: Record<string, string> = {};
@@ -24,7 +25,7 @@ export function sanitizeHeaders(headers: any): Record<string, string> {
 /**
  * Sanitizes body content by truncating large payloads and redacting sensitive fields
  */
-export function sanitizeBody(body: any, maxSize?: number): any {
+export function sanitizeBody(body: unknown, maxSize?: number): unknown {
   if (body == null) return null;
   
   const { maxBodySize = 10000, previewSize = 500, sensitiveBodyKeys = ['password', 'token', 'secret', 'key'] } = tracingConfig;
@@ -59,8 +60,9 @@ export function sanitizeBody(body: any, maxSize?: number): any {
       }
       
       return cloned;
-    } catch {
-      return { _error: 'Failed to sanitize body' };
+    } catch (error) {
+      console.error('[Tracing] Failed to sanitize body:', error);
+      return { _error: 'Failed to sanitize body', _details: String(error) };
     }
   }
   
@@ -70,7 +72,7 @@ export function sanitizeBody(body: any, maxSize?: number): any {
 /**
  * Recursively sanitizes sensitive fields in an object
  */
-function sanitizeObjectFields(obj: any, sensitiveKeys: string[], depth = 0): void {
+function sanitizeObjectFields(obj: Record<string, unknown>, sensitiveKeys: string[], depth = 0): void {
   if (!obj || typeof obj !== 'object' || depth > 10) return;
   
   for (const key of Object.keys(obj)) {

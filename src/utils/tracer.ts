@@ -2,7 +2,7 @@ import pino from 'pino';
 import * as rfs from 'rotating-file-stream';
 import { join } from 'path';
 import { HOME_DIR } from '../constants';
-import type { TraceContext } from '../tracing/context';
+import type { TraceContext, TracingConfig, ErrorDetails } from '../tracing/types';
 import { getRotatingLogPath } from '../tracing/paths';
 
 // Default configuration for tracing
@@ -38,10 +38,10 @@ let tracerInstance: pino.Logger | null = null;
 let streamInstance: rfs.RotatingFileStream | null = null;
 
 // Export the merged config
-export let tracingConfig: any = DEFAULT_TRACING_CONFIG;
+export let tracingConfig: TracingConfig = DEFAULT_TRACING_CONFIG as TracingConfig;
 
 // Initialize tracer with config
-export function initializeTracer(config: any) {
+export function initializeTracer(config: Record<string, unknown>) {
   // Merge user config with defaults and export it
   tracingConfig = {
     ...DEFAULT_TRACING_CONFIG,
@@ -65,8 +65,23 @@ export function initializeTracer(config: any) {
     return;
   }
 
-  // Use configured logDirectory
-  const LOGS_BASE_DIR = tracingConfig.logDirectory;
+  // Use configured logDirectory with path validation
+  const { resolve, isAbsolute } = require('path');
+  const configuredDir = tracingConfig.logDirectory;
+  
+  // Resolve to absolute path
+  const LOGS_BASE_DIR = isAbsolute(configuredDir) 
+    ? resolve(configuredDir)
+    : resolve(HOME_DIR, configuredDir);
+  
+  // Security check: ensure log directory is within safe boundaries
+  // Allow logs in HOME_DIR or /tmp or /var/log
+  const safeRoots = [HOME_DIR, '/tmp', '/var/log'];
+  const isSafe = safeRoots.some(root => LOGS_BASE_DIR.startsWith(root));
+  
+  if (!isSafe) {
+    throw new Error(`Log directory must be within user home, /tmp, or /var/log. Got: ${LOGS_BASE_DIR}`);
+  }
   
   // Ensure the base directory exists
   const fs = require('fs');
@@ -147,7 +162,7 @@ export const TraceEvents = {
 
 
 // Helper function to capture error details
-export function captureErrorDetails(error: any) {
+export function captureErrorDetails(error: unknown): ErrorDetails {
   return {
     message: error instanceof Error ? error.message : String(error),
     name: error instanceof Error ? error.name : 'UnknownError',
@@ -165,13 +180,13 @@ export function captureErrorDetails(error: any) {
 export function trace(
   event: string,
   context: TraceContext,
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   startTime?: number
 ) {
   const traceId = generateTraceId(context.correlationId, context.sequence++);
   const timestamp = Date.now();
   
-  const finalData: Record<string, any> = {
+  const finalData: Record<string, unknown> = {
     event,
     correlationId: context.correlationId,
     sessionId: context.sessionId,

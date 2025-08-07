@@ -1,15 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { nanoid } from 'nanoid';
+import type { TraceContext } from './types';
 
-/**
- * Context that flows through the entire request lifecycle
- */
-export interface TraceContext {
-  readonly correlationId: string;
-  readonly sessionId: string;
-  sequence: number;
-  readonly startTime: number;
-}
+// Re-export for backward compatibility
+export type { TraceContext } from './types';
 
 // Global AsyncLocalStorage instance for trace context
 export const traceStorage = new AsyncLocalStorage<TraceContext>();
