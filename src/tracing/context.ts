@@ -1,15 +1,22 @@
-import { AsyncLocalStorage } from 'async_hooks';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { nanoid } from 'nanoid';
 
+/**
+ * Context that flows through the entire request lifecycle
+ */
 export interface TraceContext {
-  correlationId: string;
-  sessionId: string;
+  readonly correlationId: string;
+  readonly sessionId: string;
   sequence: number;
-  startTime: number;
+  readonly startTime: number;
 }
 
+// Global AsyncLocalStorage instance for trace context
 export const traceStorage = new AsyncLocalStorage<TraceContext>();
 
+/**
+ * Creates a new trace context for a request
+ */
 export function createTraceContext(sessionId?: string): TraceContext {
   return {
     correlationId: `req-${nanoid(12)}`,
@@ -19,19 +26,26 @@ export function createTraceContext(sessionId?: string): TraceContext {
   };
 }
 
+/**
+ * Gets the current trace context from AsyncLocalStorage
+ */
 export function getTraceContext(): TraceContext | undefined {
   return traceStorage.getStore();
 }
 
+/**
+ * Runs a function within a trace context
+ */
 export function runWithTraceContext<T>(context: TraceContext, fn: () => T): T {
   return traceStorage.run(context, fn);
 }
 
-export function incrementSequence(): number {
-  const context = getTraceContext();
-  if (context) {
-    context.sequence++;
-    return context.sequence;
-  }
-  return 0;
+/**
+ * Runs an async function within a trace context
+ */
+export async function runWithTraceContextAsync<T>(
+  context: TraceContext, 
+  fn: () => Promise<T>
+): Promise<T> {
+  return traceStorage.run(context, fn);
 }

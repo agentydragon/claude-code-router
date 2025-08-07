@@ -1,0 +1,30 @@
+{
+  "providers": [
+    {
+      "name": "test-provider",
+      "baseUrl": "http://localhost:45671/v1/chat/completions",
+      "apiKey": "test-key-12345",
+      "models": [
+        "test-model"
+      ],
+      "transformer": {
+        "use": [
+          "cerebras"
+        ]
+      }
+    }
+  ],
+  "Router": {
+    "default": "test-provider,test-model"
+  },
+  "Tracing": {
+    "enabled": true,
+    "level": "info",
+    "rotation": "1h",
+    "compress": false,
+    "maxBodySize": 5000,
+    "previewSize": 200
+  },
+  "HOST": "127.0.0.1",
+  "PORT": 45672
+}

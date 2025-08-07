@@ -1,217 +1,181 @@
-import { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
-import { 
-  TraceEvents, 
-  trace,
-  tracingConfig,
-  captureErrorDetails
-} from '../utils/tracer';
-import { 
-  createTraceContext, 
-  runWithTraceContext,
-  getTraceContext,
-  incrementSequence,
-  TraceContext
-} from '../tracing/context';
+import { FastifyRequest, FastifyReply, FastifyInstance, HookHandlerDoneFunction } from 'fastify';
+import { TraceEvents, trace, tracingConfig, captureErrorDetails } from '../utils/tracer';
+import { createTraceContext, getTraceContext, TraceContext, traceStorage } from '../tracing/context';
 
-// Setup tracing hooks on the Fastify instance
-export function setupTracingHooks(fastify: FastifyInstance) {
-  // Pre-handler: Create context and log inbound request
-  fastify.addHook('preHandler', async (req, reply) => {
-    const sessionId = req.headers['x-session-id'] as string;
-    const context = createTraceContext(sessionId);
-    const startTime = Date.now();
-    
-    // Store context and start time on request
-    (req as any).traceContext = context;
-    (req as any).traceStartTime = startTime;
-    
-    // Run in AsyncLocalStorage context
-    await runWithTraceContext(context, async () => {
-      // Log inbound request
-      trace(TraceEvents.INBOUND_REQUEST, context, {
-        method: req.method,
-        url: req.url,
-        headers: sanitizeHeaders(req.headers),
-        body: sanitizeBody(req.body),
-        ip: req.ip,
-        userAgent: req.headers['user-agent'],
-        timestamp: Date.now()
-      });
-    });
-  });
-
-  // On-send: Log inbound response
-  fastify.addHook('onSend', async (req, reply, payload) => {
-    const context = (req as any).traceContext as TraceContext;
-    const startTime = (req as any).traceStartTime as number;
-    
-    if (context) {
-      const duration = Date.now() - startTime;
-      
-      await runWithTraceContext(context, async () => {
-        incrementSequence();
-        // Log inbound response
-        trace(TraceEvents.INBOUND_RESPONSE, context, {
-          statusCode: reply.statusCode,
-          duration,
-          headers: sanitizeHeaders(reply.getHeaders()),
-          body: sanitizeBody(payload),
-          bytesWritten: Buffer.byteLength(String(payload)),
-          timestamp: Date.now()
-        });
-      });
-    }
-    
-    return payload;
-  });
-
-  // On-error: Log errors
-  fastify.addHook('onError', async (req, reply, error) => {
-    const context = (req as any).traceContext as TraceContext;
-    const startTime = (req as any).traceStartTime as number;
-    
-    if (context) {
-      const duration = Date.now() - startTime;
-      
-      await runWithTraceContext(context, async () => {
-        incrementSequence();
-        trace(TraceEvents.INBOUND_ERROR, context, {
-          error: captureErrorDetails(error),
-          statusCode: reply.statusCode,
-          duration,
-          timestamp: Date.now()
-        });
-      });
-    }
-  });
-}
-
-// Middleware to ensure AsyncLocalStorage context is maintained
-export async function maintainTraceContext(req: FastifyRequest, reply: FastifyReply) {
-  const context = (req as any).traceContext as TraceContext;
+/**
+ * Sanitizes headers by redacting sensitive values
+ */
+export function sanitizeHeaders(headers: any): Record<string, string> {
+  if (!headers || typeof headers !== 'object') return {};
   
-  if (context) {
-    // Ensure the rest of the request runs in the trace context
-    // AsyncLocalStorage will maintain the context automatically
-  }
-}
-
-// Helper to log outbound requests (to LLM providers)
-export function traceOutboundRequest(
-  context: TraceContext,
-  provider: string,
-  model: string,
-  request: any
-) {
-  trace(TraceEvents.OUTBOUND_REQUEST, context, {
-    provider,
-    model,
-    method: request.method || 'POST',
-    url: request.url,
-    headers: sanitizeHeaders(request.headers),
-    body: sanitizeBody(request.body),
-  });
-}
-
-// Helper to log outbound responses (from LLM providers)
-export function traceOutboundResponse(
-  context: TraceContext,
-  provider: string,
-  model: string,
-  response: any,
-  duration: number
-) {
-  trace(TraceEvents.OUTBOUND_RESPONSE, context, {
-    provider,
-    model,
-    statusCode: response.statusCode || response.status,
-    duration,
-    headers: sanitizeHeaders(response.headers),
-    body: sanitizeBody(response.body || response.data),
-  });
-}
-
-// Helper to log routing decisions
-export function traceRouteDecision(
-  context: TraceContext,
-  decision: {
-    originalRoute?: string;
-    selectedProvider: string;
-    selectedModel: string;
-    reason?: string;
-    rules?: any[];
-  }
-) {
-  trace(TraceEvents.ROUTE_DECISION, context, decision);
-}
-
-// Helper to log transformations
-export function traceTransformation(
-  context: TraceContext,
-  transformation: {
-    transformer: string;
-    direction: 'request' | 'response';
-    before?: any;
-    after?: any;
-  }
-) {
-  trace(TraceEvents.TRANSFORMER_APPLIED, context, transformation);
-}
-
-function sanitizeHeaders(headers: any): any {
-  if (!headers) return {};
+  const sanitized: Record<string, string> = {};
+  const sensitivePatterns = tracingConfig.sensitiveHeaders || ['authorization', 'api-key', 'x-api-key'];
   
-  const sensitive = tracingConfig.sensitiveHeaders;
-  const sanitized = { ...headers };
-  
-  for (const key of Object.keys(sanitized)) {
-    if (sensitive.some((s: string) => key.toLowerCase().includes(s.toLowerCase()))) {
-      sanitized[key] = '[REDACTED]';
-    }
+  for (const [key, value] of Object.entries(headers)) {
+    const lowerKey = key.toLowerCase();
+    const isSensitive = sensitivePatterns.some((pattern: string) => 
+      lowerKey.includes(pattern.toLowerCase())
+    );
+    
+    sanitized[key] = isSensitive ? '[REDACTED]' : String(value);
   }
   
   return sanitized;
 }
 
-function sanitizeBody(body: any, maxSize?: number): any {
-  if (!body) return null;
+/**
+ * Sanitizes body content by truncating large payloads and redacting sensitive fields
+ */
+export function sanitizeBody(body: any, maxSize?: number): any {
+  if (body == null) return null;
   
-  const { maxBodySize, previewSize } = tracingConfig;
+  const { maxBodySize = 10000, previewSize = 500, sensitiveBodyKeys = ['password', 'token', 'secret', 'key'] } = tracingConfig;
   const sizeLimit = maxSize || maxBodySize;
   
-  // For large bodies, just log metadata
-  const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
-  if (bodyStr.length > sizeLimit) {
-    return {
-      _truncated: true,
-      _size: bodyStr.length,
-      _preview: bodyStr.substring(0, previewSize) + '...',
-    };
+  // Handle string bodies
+  if (typeof body === 'string') {
+    if (body.length > sizeLimit) {
+      return {
+        _truncated: true,
+        _size: body.length,
+        _preview: body.substring(0, previewSize) + '...'
+      };
+    }
+    return body;
   }
   
-  // Sanitize sensitive fields in JSON bodies
+  // Handle object bodies
   if (typeof body === 'object') {
-    const sanitized = JSON.parse(JSON.stringify(body));
-    sanitizeObject(sanitized);
-    return sanitized;
+    try {
+      const cloned = JSON.parse(JSON.stringify(body));
+      sanitizeObjectFields(cloned, sensitiveBodyKeys);
+      
+      const serialized = JSON.stringify(cloned);
+      if (serialized.length > sizeLimit) {
+        return {
+          _truncated: true,
+          _size: serialized.length,
+          _type: 'object',
+          _keys: Object.keys(cloned)
+        };
+      }
+      
+      return cloned;
+    } catch {
+      return { _error: 'Failed to sanitize body' };
+    }
   }
   
   return body;
 }
 
-function sanitizeObject(obj: any, depth = 0): void {
-  if (depth > 10) return; // Prevent infinite recursion
-  
-  const sensitiveKeys = tracingConfig.sensitiveBodyKeys;
+/**
+ * Recursively sanitizes sensitive fields in an object
+ */
+function sanitizeObjectFields(obj: any, sensitiveKeys: string[], depth = 0): void {
+  if (!obj || typeof obj !== 'object' || depth > 10) return;
   
   for (const key of Object.keys(obj)) {
-    if (sensitiveKeys.some((s: string) => key.toLowerCase().includes(s.toLowerCase()))) {
+    const lowerKey = key.toLowerCase();
+    const isSensitive = sensitiveKeys.some((pattern: string) => 
+      lowerKey.includes(pattern.toLowerCase())
+    );
+    
+    if (isSensitive) {
       obj[key] = '[REDACTED]';
-    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-      sanitizeObject(obj[key], depth + 1);
+    } else if (obj[key] && typeof obj[key] === 'object') {
+      sanitizeObjectFields(obj[key], sensitiveKeys, depth + 1);
     }
   }
 }
 
-// Export sanitization functions for use in transformer
-export { sanitizeHeaders, sanitizeBody };
+/**
+ * Extracts or creates trace context for a request
+ */
+function getOrCreateContext(req: FastifyRequest): TraceContext {
+  // Check if context already exists on request
+  const existing = (req as any).traceContext as TraceContext | undefined;
+  if (existing) return existing;
+  
+  // Create new context
+  const sessionId = req.headers['x-session-id'] as string | undefined;
+  const context = createTraceContext(sessionId);
+  
+  // Store on request for other hooks
+  (req as any).traceContext = context;
+  (req as any).traceStartTime = Date.now();
+  
+  return context;
+}
+
+/**
+ * Sets up tracing hooks on a Fastify instance
+ */
+export function setupTracingHooks(fastify: FastifyInstance): void {
+  // Establish AsyncLocalStorage context early in request lifecycle
+  fastify.addHook('preParsing', async (_req, _reply, payload) => {
+    const context = getOrCreateContext(_req);
+    traceStorage.enterWith(context);
+    return payload;
+  });
+  
+  // Log inbound request after parsing
+  fastify.addHook('preHandler', async (req) => {
+    const context = getTraceContext();
+    if (!context) return;
+    
+    trace(TraceEvents.INBOUND_REQUEST, context, {
+      method: req.method,
+      url: req.url,
+      headers: sanitizeHeaders(req.headers),
+      body: sanitizeBody(req.body),
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      timestamp: Date.now()
+    });
+  });
+  
+  // Log inbound response before sending
+  fastify.addHook('onSend', async (req, reply, payload) => {
+    const context = getTraceContext();
+    const startTime = (req as any).traceStartTime as number | undefined;
+    
+    if (!context || !startTime) return payload;
+    
+    trace(TraceEvents.INBOUND_RESPONSE, context, {
+      statusCode: reply.statusCode,
+      duration: Date.now() - startTime,
+      headers: sanitizeHeaders(reply.getHeaders()),
+      body: sanitizeBody(payload),
+      timestamp: Date.now()
+    });
+    
+    return payload;
+  });
+  
+  // Log errors
+  fastify.addHook('onError', async (req, _reply, error) => {
+    const context = getTraceContext();
+    const startTime = (req as any).traceStartTime as number | undefined;
+    
+    if (!context || !startTime) return;
+    
+    trace(TraceEvents.INBOUND_ERROR, context, {
+      error: captureErrorDetails(error),
+      statusCode: _reply.statusCode,
+      duration: Date.now() - startTime,
+      timestamp: Date.now()
+    });
+  });
+}
+
+/**
+ * Middleware to re-establish context if lost (safety net)
+ */
+export async function maintainTraceContext(req: FastifyRequest, _reply: FastifyReply): Promise<void> {
+  const context = (req as any).traceContext as TraceContext | undefined;
+  
+  if (context && !getTraceContext()) {
+    traceStorage.enterWith(context);
+  }
+}

@@ -152,5 +152,6 @@ export const router = async (req: any, _res: any, config: any) => {
     log("Error in router middleware:", error.message);
     req.body.model = config.Router!.default;
   }
+  
   return;
 };

@@ -6,53 +6,29 @@ import { readFileSync } from "fs";
 import fastifyStatic from "@fastify/static";
 import { setupTracingHooks, maintainTraceContext } from "./middleware/tracing";
 import { initializeTracer } from "./utils/tracer";
-import { TracingTransformer } from "./tracing/transformer";
+import { wrapFetch } from "./tracing/interceptor";
 
 export const createServer = (config: any): Server => {
+  // Initialize tracer with config FIRST
+  const actualConfig = config.initialConfig || config;
+  initializeTracer(actualConfig);
+
+  // Add tracing hooks if enabled
+  const tracingEnabled = actualConfig.Tracing?.enabled !== false;
+  if (tracingEnabled) {
+    // Wrap fetch for outbound tracing
+    wrapFetch();
+  }
+
+  // Create server
   const server = new Server(config);
 
-  // Initialize tracer with config (this also stores config for middleware use)
-  initializeTracer(config);
-
-  // Add tracing hooks if enabled in config
-  const tracingEnabled = config.Tracing?.enabled !== false;
   if (tracingEnabled) {
     // Setup all tracing hooks properly at the server level
     setupTracingHooks(server.app);
     
     // Add middleware to maintain context through the request
     server.app.addHook('preHandler', maintainTraceContext);
-    
-    // Register transformer after server is ready
-    server.app.addHook('onReady', async () => {
-      // Register the tracing transformer
-      const tracingTransformer = new TracingTransformer();
-      server.app._server!.transformerService.registerTransformer('tracing', tracingTransformer);
-      console.log('✅ Registered tracing transformer');
-      
-      // Auto-inject tracing transformer into all provider configs
-      if (config.providers || config.Providers) {
-        const providers = config.providers || config.Providers;
-        providers.forEach((provider: any) => {
-          if (!provider.transformer) {
-            provider.transformer = { use: [] };
-          }
-          if (!provider.transformer.use) {
-            provider.transformer.use = [];
-          }
-          
-          // Add tracing as the FIRST transformer (so it sees original data)
-          const hasTracing = provider.transformer.use.some((t: any) => 
-            typeof t === 'string' ? t === 'tracing' : t?.name === 'tracing'
-          );
-          
-          if (!hasTracing) {
-            provider.transformer.use.unshift('tracing');
-            console.log(`✅ Added tracing transformer to provider: ${provider.name}`);
-          }
-        });
-      }
-    });
   }
 
   // Add endpoint to read config.json with access control

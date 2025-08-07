@@ -64,18 +64,25 @@ export function initializeTracer(config: any) {
     return;
   }
 
-  const LOGS_BASE_DIR = join(HOME_DIR, 'logs');
+  // Use configured logDirectory
+  const LOGS_BASE_DIR = tracingConfig.logDirectory;
+  
+  // Ensure the base directory exists
+  const fs = require('fs');
+  if (!fs.existsSync(LOGS_BASE_DIR)) {
+    fs.mkdirSync(LOGS_BASE_DIR, { recursive: true });
+  }
 
   // Create rotating file stream with automatic compression
   // Files will be like: 2025/01/07/trace-14.jsonl (and .gz when compressed)
   streamInstance = rfs.createStream((time, index) => {
-    // time is a Date object if rotation occurred
-    if (!time) return 'trace.jsonl';
+    // Use current time if no rotation time provided
+    const now = time || new Date();
     
-    const year = time.getFullYear();
-    const month = String(time.getMonth() + 1).padStart(2, '0');
-    const day = String(time.getDate()).padStart(2, '0');
-    const hour = String(time.getHours()).padStart(2, '0');
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
     
     return `${year}/${month}/${day}/trace-${hour}.jsonl`;
   }, {
@@ -95,6 +102,7 @@ export function initializeTracer(config: any) {
       },
     },
   }, streamInstance);
+  
 }
 
 // Export a getter for the tracer
