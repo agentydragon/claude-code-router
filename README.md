@@ -180,7 +180,86 @@ ccr code
 > ccr restart
 > ```
 
-### 4. UI Mode (Beta)
+### 4. Tracing (Optional)
+
+Claude Code Router includes comprehensive request/response tracing for debugging and monitoring purposes. When enabled, it logs all four key events in the request lifecycle with correlation IDs:
+
+1. **Inbound Request** - Request from Claude Code to the router
+2. **Outbound Request** - Request from the router to the LLM provider
+3. **Outbound Response** - Response from the LLM provider to the router
+4. **Inbound Response** - Response from the router to Claude Code
+
+#### Configuration
+
+Add a `Tracing` section to your `config.json`:
+
+```json
+{
+  "Tracing": {
+    "enabled": true,              // Enable/disable tracing
+    "level": "info",               // Log level (debug, info, warn, error)
+    "logDirectory": "~/.claude-code-router/logs",  // Where to store logs
+    "rotation": "1h",              // Rotate logs hourly (1h, 1d, etc.)
+    "maxFiles": 168,               // Keep 168 files (7 days * 24 hours)
+    "maxFileSize": "500M",         // Max size per log file
+    "compress": true,              // Compress rotated logs with gzip
+    "maxBodySize": 10000,          // Max body size to log (bytes)
+    "previewSize": 500,            // Preview size for truncated bodies
+    "traceOutbound": true,         // Trace outbound requests
+    "outboundUrlPatterns": [       // URL patterns to trace (optional)
+      "/v1/",
+      "/api/",
+      "/v1beta/"
+    ],
+    "sensitiveHeaders": [          // Headers to redact
+      "authorization",
+      "x-api-key",
+      "api-key"
+    ],
+    "sensitiveBodyKeys": [         // Body fields to redact
+      "password",
+      "secret",
+      "token",
+      "apikey"
+    ]
+  }
+}
+```
+
+#### Log Format and Location
+
+Logs are written in JSONL format (one JSON object per line) to:
+```
+~/.claude-code-router/logs/YYYY/MM/DD/trace-HH.jsonl
+```
+
+Example log entry:
+```json
+{
+  "event": "inbound_request",
+  "correlationId": "req-abc123def456",
+  "traceId": "req-abc123def456-000",
+  "sessionId": "session-xyz789",
+  "timestamp": 1754607496005,
+  "method": "POST",
+  "url": "/v1/messages",
+  "headers": {
+    "content-type": "application/json",
+    "authorization": "[REDACTED]"
+  },
+  "body": { "model": "claude-3.5-sonnet", "messages": [...] }
+}
+```
+
+#### Correlation IDs
+
+All events related to a single request share the same `correlationId` (format: `req-xxxxxxxxxxxx`), making it easy to trace the complete request flow. Each event has a unique `traceId` with a sequence number suffix.
+
+#### Performance Impact
+
+Tracing adds minimal overhead (~1-2ms per request). Log rotation and compression happen in the background without blocking requests.
+
+### 5. UI Mode (Beta)
 
 For a more intuitive experience, you can use the UI mode to manage your configuration:
 

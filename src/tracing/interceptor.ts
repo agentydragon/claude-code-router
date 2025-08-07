@@ -1,24 +1,38 @@
 import { getTraceContext, TraceContext } from './context';
-import { trace, TraceEvents, captureErrorDetails } from '../utils/tracer';
-import { sanitizeHeaders, sanitizeBody } from '../middleware/tracing';
-
-// LLM API URL patterns to trace
-const LLM_URL_PATTERNS = [
-  '/v1/messages',
-  '/v1/chat/completions',
-  '/v1beta/models',
-  '/v1/projects'
-] as const;
+import { trace, TraceEvents, captureErrorDetails, tracingConfig } from '../utils/tracer';
+import { sanitizeHeaders, sanitizeBody } from '../tracing/sanitize';
 
 // Wrapper metadata
 const WRAPPER_SYMBOL = Symbol('fetchWrapped');
 let originalFetch: typeof global.fetch | null = null;
 
 /**
- * Determines if a URL is an LLM API endpoint we should trace
+ * Determines if a URL should be traced based on configuration
  */
-function isLLMEndpoint(url: string): boolean {
-  return LLM_URL_PATTERNS.some(pattern => url.includes(pattern));
+function shouldTraceUrl(url: string): boolean {
+  // Check if outbound tracing is enabled at all
+  if (tracingConfig.traceOutbound === false) {
+    return false;
+  }
+  
+  // If no patterns configured, trace everything that looks like an API call
+  const patterns = tracingConfig.outboundUrlPatterns;
+  if (!patterns || patterns.length === 0) {
+    // Trace common API patterns by default
+    return url.includes('/v1/') || url.includes('/api/') || url.includes('/v1beta/');
+  }
+  
+  // Check if URL matches any configured pattern
+  return patterns.some((pattern: string) => {
+    // Support both substring matching and regex
+    if (pattern.startsWith('/') && pattern.endsWith('/')) {
+      // Regex pattern
+      const regex = new RegExp(pattern.slice(1, -1));
+      return regex.test(url);
+    }
+    // Simple substring match
+    return url.includes(pattern);
+  });
 }
 
 /**
@@ -92,10 +106,9 @@ function traceRequest(
   
   trace(TraceEvents.OUTBOUND_REQUEST, context, {
     url,
-    method: init?.method || 'GET',
-    headers: sanitizeHeaders(init?.headers || {}),
-    body: sanitizeBody(requestBody),
-    timestamp: Date.now()
+    method: init?.method,
+    headers: sanitizeHeaders(init?.headers),
+    body: sanitizeBody(requestBody)
   });
 }
 
@@ -113,10 +126,8 @@ async function traceResponse(
     statusCode: response.status,
     statusText: response.statusText,
     headers: sanitizeHeaders(Object.fromEntries(response.headers.entries())),
-    body: sanitizeBody(responseBody),
-    duration: Date.now() - startTime,
-    timestamp: Date.now()
-  });
+    body: sanitizeBody(responseBody)
+  }, startTime);
 }
 
 /**
@@ -131,11 +142,9 @@ function traceError(
 ): void {
   trace(TraceEvents.OUTBOUND_ERROR, context, {
     url,
-    method: init?.method || 'GET',
-    error: captureErrorDetails(error),
-    duration: Date.now() - startTime,
-    timestamp: Date.now()
-  });
+    method: init?.method,
+    error: captureErrorDetails(error)
+  }, startTime);
 }
 
 /**
@@ -156,7 +165,7 @@ export function wrapFetch(): void {
     init?: RequestInit
   ): Promise<Response> {
     const url = extractUrl(input);
-    const shouldTrace = isLLMEndpoint(url);
+    const shouldTrace = shouldTraceUrl(url);
     const context = shouldTrace ? getTraceContext() : null;
     const startTime = Date.now();
     

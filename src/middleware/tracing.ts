@@ -1,93 +1,7 @@
-import { FastifyRequest, FastifyReply, FastifyInstance, HookHandlerDoneFunction } from 'fastify';
-import { TraceEvents, trace, tracingConfig, captureErrorDetails } from '../utils/tracer';
+import { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
+import { TraceEvents, trace, captureErrorDetails } from '../utils/tracer';
 import { createTraceContext, getTraceContext, TraceContext, traceStorage } from '../tracing/context';
-
-/**
- * Sanitizes headers by redacting sensitive values
- */
-export function sanitizeHeaders(headers: any): Record<string, string> {
-  if (!headers || typeof headers !== 'object') return {};
-  
-  const sanitized: Record<string, string> = {};
-  const sensitivePatterns = tracingConfig.sensitiveHeaders || ['authorization', 'api-key', 'x-api-key'];
-  
-  for (const [key, value] of Object.entries(headers)) {
-    const lowerKey = key.toLowerCase();
-    const isSensitive = sensitivePatterns.some((pattern: string) => 
-      lowerKey.includes(pattern.toLowerCase())
-    );
-    
-    sanitized[key] = isSensitive ? '[REDACTED]' : String(value);
-  }
-  
-  return sanitized;
-}
-
-/**
- * Sanitizes body content by truncating large payloads and redacting sensitive fields
- */
-export function sanitizeBody(body: any, maxSize?: number): any {
-  if (body == null) return null;
-  
-  const { maxBodySize = 10000, previewSize = 500, sensitiveBodyKeys = ['password', 'token', 'secret', 'key'] } = tracingConfig;
-  const sizeLimit = maxSize || maxBodySize;
-  
-  // Handle string bodies
-  if (typeof body === 'string') {
-    if (body.length > sizeLimit) {
-      return {
-        _truncated: true,
-        _size: body.length,
-        _preview: body.substring(0, previewSize) + '...'
-      };
-    }
-    return body;
-  }
-  
-  // Handle object bodies
-  if (typeof body === 'object') {
-    try {
-      const cloned = JSON.parse(JSON.stringify(body));
-      sanitizeObjectFields(cloned, sensitiveBodyKeys);
-      
-      const serialized = JSON.stringify(cloned);
-      if (serialized.length > sizeLimit) {
-        return {
-          _truncated: true,
-          _size: serialized.length,
-          _type: 'object',
-          _keys: Object.keys(cloned)
-        };
-      }
-      
-      return cloned;
-    } catch {
-      return { _error: 'Failed to sanitize body' };
-    }
-  }
-  
-  return body;
-}
-
-/**
- * Recursively sanitizes sensitive fields in an object
- */
-function sanitizeObjectFields(obj: any, sensitiveKeys: string[], depth = 0): void {
-  if (!obj || typeof obj !== 'object' || depth > 10) return;
-  
-  for (const key of Object.keys(obj)) {
-    const lowerKey = key.toLowerCase();
-    const isSensitive = sensitiveKeys.some((pattern: string) => 
-      lowerKey.includes(pattern.toLowerCase())
-    );
-    
-    if (isSensitive) {
-      obj[key] = '[REDACTED]';
-    } else if (obj[key] && typeof obj[key] === 'object') {
-      sanitizeObjectFields(obj[key], sensitiveKeys, depth + 1);
-    }
-  }
-}
+import { sanitizeHeaders, sanitizeBody } from '../tracing/sanitize';
 
 /**
  * Extracts or creates trace context for a request
@@ -129,9 +43,7 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
       url: req.url,
       headers: sanitizeHeaders(req.headers),
       body: sanitizeBody(req.body),
-      ip: req.ip,
-      userAgent: req.headers['user-agent'],
-      timestamp: Date.now()
+      ip: req.ip
     });
   });
   
@@ -144,11 +56,9 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
     
     trace(TraceEvents.INBOUND_RESPONSE, context, {
       statusCode: reply.statusCode,
-      duration: Date.now() - startTime,
       headers: sanitizeHeaders(reply.getHeaders()),
-      body: sanitizeBody(payload),
-      timestamp: Date.now()
-    });
+      body: sanitizeBody(payload)
+    }, startTime);
     
     return payload;
   });
@@ -162,10 +72,8 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
     
     trace(TraceEvents.INBOUND_ERROR, context, {
       error: captureErrorDetails(error),
-      statusCode: _reply.statusCode,
-      duration: Date.now() - startTime,
-      timestamp: Date.now()
-    });
+      statusCode: _reply.statusCode
+    }, startTime);
   });
 }
 
@@ -179,3 +87,6 @@ export async function maintainTraceContext(req: FastifyRequest, _reply: FastifyR
     traceStorage.enterWith(context);
   }
 }
+
+// Re-export for backward compatibility
+export { sanitizeHeaders, sanitizeBody } from '../tracing/sanitize';

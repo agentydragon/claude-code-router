@@ -1,8 +1,9 @@
 import pino from 'pino';
 import * as rfs from 'rotating-file-stream';
-import { nanoid } from 'nanoid';
 import { join } from 'path';
 import { HOME_DIR } from '../constants';
+import type { TraceContext } from '../tracing/context';
+import { getRotatingLogPath } from '../tracing/paths';
 
 // Default configuration for tracing
 const DEFAULT_TRACING_CONFIG = {
@@ -52,7 +53,7 @@ export function initializeTracer(config: any) {
     level,
     rotation,
     maxFileSize,
-    retentionDays,
+    maxFiles,
     compress,
   } = tracingConfig;
 
@@ -75,22 +76,12 @@ export function initializeTracer(config: any) {
 
   // Create rotating file stream with automatic compression
   // Files will be like: 2025/01/07/trace-14.jsonl (and .gz when compressed)
-  streamInstance = rfs.createStream((time, index) => {
-    // Use current time if no rotation time provided
-    const now = time || new Date();
-    
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hour = String(now.getHours()).padStart(2, '0');
-    
-    return `${year}/${month}/${day}/trace-${hour}.jsonl`;
-  }, {
-    interval: rotation,  // Rotation interval from config
+  streamInstance = rfs.createStream(getRotatingLogPath, {
+    interval: rotation,
     path: LOGS_BASE_DIR,
-    compress: compress ? 'gzip' : false,  // Compression from config
-    maxFiles: retentionDays * 24,  // Convert days to hours for hourly rotation
-    size: maxFileSize,  // Max file size from config
+    compress,  // Pass through directly - rfs accepts false | 'gzip' | true
+    maxFiles,
+    size: maxFileSize,
   });
 
   tracerInstance = pino({
@@ -122,11 +113,10 @@ export const tracer = new Proxy({} as pino.Logger, {
   }
 });
 
-// Correlation ID generators
-export const generateCorrelationId = () => `req-${nanoid(12)}`;
-export const generateSessionId = () => `sess-${nanoid(16)}`;
-export const generateTraceId = (correlationId: string, sequence: number) => 
-  `${correlationId}-${String(sequence).padStart(3, '0')}`;
+// Generate trace ID from correlation ID and sequence
+function generateTraceId(correlationId: string, sequence: number): string {
+  return `${correlationId}-${String(sequence).padStart(3, '0')}`;
+}
 
 // Event type constants for consistency
 export const TraceEvents = {
@@ -155,19 +145,6 @@ export const TraceEvents = {
   CONFIG_RELOAD: 'config_reload',
 } as const;
 
-// Helper function to create trace context
-export interface TraceContext {
-  correlationId: string;
-  sessionId?: string;
-  sequence: number;
-}
-
-export function createTraceContext(): TraceContext {
-  return {
-    correlationId: generateCorrelationId(),
-    sequence: 0,
-  };
-}
 
 // Helper function to capture error details
 export function captureErrorDetails(error: any) {
@@ -188,17 +165,27 @@ export function captureErrorDetails(error: any) {
 export function trace(
   event: string,
   context: TraceContext,
-  data: Record<string, any>
+  data: Record<string, any>,
+  startTime?: number
 ) {
   const traceId = generateTraceId(context.correlationId, context.sequence++);
+  const timestamp = Date.now();
   
-  tracer.info({
+  const finalData: Record<string, any> = {
     event,
     correlationId: context.correlationId,
     sessionId: context.sessionId,
     traceId,
+    timestamp,
     ...data,
-  });
+  };
+  
+  // Auto-compute duration if startTime provided
+  if (startTime !== undefined) {
+    finalData.duration = timestamp - startTime;
+  }
+  
+  tracer.info(finalData);
 }
 
 // Graceful shutdown

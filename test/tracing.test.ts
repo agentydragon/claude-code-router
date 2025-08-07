@@ -92,7 +92,12 @@ async function runTracingTest() {
         enabled: true,
         level: 'info',
         compress: false,
-        logDirectory: TEST_LOGS_DIR
+        logDirectory: TEST_LOGS_DIR,
+        maxFiles: 168,  // 7 days * 24 hours
+        rotation: '1h',
+        maxFileSize: '500M',
+        maxBodySize: 5000,
+        previewSize: 200
       },
       APIKEY: 'test-api-key',
       HOST: '127.0.0.1',
