@@ -106,7 +106,16 @@ async function run(options: RunOptions = {}) {
   });
   server.addHook("preHandler", async (req, reply) => {
     if(req.url.startsWith("/v1/messages")) {
-      router(req, reply, config)
+      // Run router in the existing trace context if available
+      const context = (req as any).traceContext;
+      if (context) {
+        const { runWithTraceContext } = require('./tracing/context');
+        await runWithTraceContext(context, async () => {
+          await router(req, reply, config);
+        });
+      } else {
+        await router(req, reply, config);
+      }
     }
   });
   server.start();

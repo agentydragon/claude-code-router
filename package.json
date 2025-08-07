@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
+    "test": "npx tsx test/tracing.test.ts",
     "release": "npm run build && npm publish"
   },
   "keywords": [
@@ -23,7 +24,10 @@
     "@musistudio/llms": "v1.0.19",
     "dotenv": "^16.4.7",
     "json5": "^2.2.3",
+    "nanoid": "^3.3.7",
     "openurl": "^1.1.1",
+    "pino": "^8.17.2",
+    "rotating-file-stream": "^3.2.1",
     "tiktoken": "^1.0.21",
     "uuid": "^11.1.0"
   },
