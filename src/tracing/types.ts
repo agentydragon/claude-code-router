@@ -47,14 +47,3 @@ export interface ErrorDetails {
 export interface SanitizedHeaders {
   [key: string]: string;
 }
-
-export interface SanitizedBody {
-  _truncated?: boolean;
-  _size?: number;
-  _preview?: string;
-  _type?: string;
-  _keys?: string[];
-  _error?: string;
-  _details?: string;
-  [key: string]: unknown;
-}

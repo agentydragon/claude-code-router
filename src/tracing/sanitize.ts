@@ -1,5 +1,5 @@
 import { tracingConfig } from '../utils/tracer';
-import type { SanitizedHeaders, SanitizedBody } from './types';
+import type { SanitizedHeaders } from './types';
 
 /**
  * Sanitizes headers by redacting sensitive values
