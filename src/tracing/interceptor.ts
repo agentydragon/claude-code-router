@@ -69,18 +69,57 @@ async function parseResponseBody(response: Response): Promise<any> {
 /**
  * Traces an outbound request
  */
-function traceRequest(
+async function traceRequest(
   context: TraceContext,
   url: string,
+  input: RequestInfo | URL,
   init: RequestInit | undefined
-): void {
-  const requestBody = parseRequestBody(init?.body);
-  
+): Promise<void> {
+  let method: string | undefined = init?.method;
+  let headersObj: Record<string, string> | undefined;
+  let bodyForTrace: any = null;
+
+  if (init?.headers) {
+    try {
+      headersObj = init.headers as any;
+      if (headersObj instanceof Headers) {
+        headersObj = Object.fromEntries(headersObj.entries());
+      }
+    } catch {}
+  }
+
+  if (init && 'body' in init && (init as any).body != null) {
+    const parsed = parseRequestBody((init as any).body);
+    bodyForTrace = typeof parsed === 'string' ? parsed : JSON.parse(JSON.stringify(parsed));
+  } else if (input instanceof Request) {
+    try {
+      method = method || input.method;
+      if (!headersObj) {
+        headersObj = Object.fromEntries(input.headers.entries());
+      }
+      const clonedReq = input.clone();
+      const contentType = clonedReq.headers.get('content-type') || '';
+      const text = await clonedReq.text();
+      if (contentType.includes('application/json') || text.startsWith('{') || text.startsWith('[')) {
+        try {
+          bodyForTrace = JSON.parse(text);
+        } catch {
+          bodyForTrace = text;
+        }
+      } else {
+        bodyForTrace = text;
+      }
+      if (typeof bodyForTrace !== 'string') {
+        bodyForTrace = JSON.parse(JSON.stringify(bodyForTrace));
+      }
+    } catch {}
+  }
+
   trace(TraceEvents.OUTBOUND_REQUEST, context, {
     url,
-    method: init?.method,
-    headers: sanitizeHeaders(init?.headers),
-    body: requestBody
+    method,
+    headers: sanitizeHeaders(headersObj || init?.headers),
+    body: bodyForTrace
   });
 }
 
@@ -142,26 +181,19 @@ export function wrapFetch(): void {
     
     // Trace request if applicable
     if (context) {
-      traceRequest(context, url, init);
+      await traceRequest(context, url, input, init);
     }
     
     try {
-      // Call original fetch
       const response = await originalFetch!(input, init);
-      
-      // Trace response if applicable
       if (context) {
         await traceResponse(context, response, startTime);
       }
-      
       return response;
     } catch (error) {
-      // Trace error if applicable
       if (context) {
         traceError(context, url, init, error, startTime);
       }
-      
-      // Always re-throw to maintain fetch behavior
       throw error;
     }
   };
