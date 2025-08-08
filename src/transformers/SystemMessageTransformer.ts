@@ -86,9 +86,25 @@ export class SystemMessageTransformer {
   /**
    * Perform the actual search-replace operation
    */
-  private replaceInContent(content: string): string {
-    if (typeof content !== 'string') return content;
-    return content.replace(this.searchPattern, this.replaceValue);
+  private replaceInContent(content: any): any {
+    if (typeof content === 'string') {
+      return content.replace(this.searchPattern, this.replaceValue);
+    }
+    
+    if (Array.isArray(content)) {
+      // Handle array of content items (e.g., OpenAI format with {type: 'text', text: '...'})
+      return content.map((item: any) => {
+        if (item.type === 'text' && item.text) {
+          return {
+            ...item,
+            text: this.replaceInContent(item.text)
+          };
+        }
+        return item;
+      });
+    }
+    
+    return content;
   }
 }
 

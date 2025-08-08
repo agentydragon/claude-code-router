@@ -14,7 +14,6 @@ export interface TraceContext {
 export interface TracingConfig {
   enabled: boolean;
   transport?: any;  // pino.transport options
-  traceOutbound?: boolean;
   sensitiveHeaders: string[];
 }
 

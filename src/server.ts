@@ -8,7 +8,6 @@ import { setupTracingHooks, maintainTraceContext } from "./middleware/tracing";
 import { initializeTracer } from "./utils/tracer";
 import { wrapFetch } from "./tracing/interceptor";
 import { OpenAIReasoningTransformer } from "./transformers/OpenAIReasoningTransformer";
-import { SystemMessageTransformer } from "./transformers/SystemMessageTransformer";
 
 export const createServer = (config: any): Server => {
   // Initialize tracer with config FIRST
@@ -38,16 +37,6 @@ export const createServer = (config: any): Server => {
         reasoningTransformer.name,
         reasoningTransformer
       );
-      
-      // Register generic system-replace transformer if configured
-      const systemReplaceConfig = actualConfig.TransformerOptions?.['system-replace'];
-      if (systemReplaceConfig && systemReplaceConfig.search && systemReplaceConfig.replace) {
-        const systemReplace = new SystemMessageTransformer(systemReplaceConfig);
-        server.app._server.transformerService.registerTransformer(
-          systemReplace.name,
-          systemReplace
-        );
-      }
     }
   } catch (error) {
     console.error('Failed to register built-in transformers:', error);

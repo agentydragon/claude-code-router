@@ -64,6 +64,31 @@ describe('Transformer Tests', () => {
       });
       assert.strictEqual(roleResult.messages[0].content, 'You are Assistant');
       assert.strictEqual(roleResult.messages[1].content, 'Claude is here');
+      
+      // Test system role message with array content (OpenAI format with cache_control)
+      const arrayContentResult = transformer.transformRequestOut({
+        messages: [
+          { 
+            role: 'system', 
+            content: [
+              { 
+                type: 'text', 
+                text: 'You are Claude Code, the official CLI for Claude.',
+                cache_control: { type: 'ephemeral' }
+              },
+              {
+                type: 'text',
+                text: 'Claude is an AI assistant.'
+              }
+            ]
+          },
+          { role: 'user', content: 'Hello Claude' }  // Should NOT be modified
+        ]
+      });
+      assert.strictEqual(arrayContentResult.messages[0].content[0].text, 'You are Assistant Code, the official CLI for Assistant.');
+      assert.strictEqual(arrayContentResult.messages[0].content[0].cache_control.type, 'ephemeral', 'cache_control should be preserved');
+      assert.strictEqual(arrayContentResult.messages[0].content[1].text, 'Assistant is an AI assistant.');
+      assert.strictEqual(arrayContentResult.messages[1].content, 'Hello Claude', 'User messages should not be modified');
     });
     
     it('should support regex patterns', () => {

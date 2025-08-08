@@ -77,6 +77,10 @@ const getUseModel = async (req: any, tokenCount: number, config: any) => {
     return req.body.model;
   }
   // if tokenCount is greater than the configured threshold, use the long context model
+  if (!config.Router) {
+    throw new Error("Router configuration is missing. Please check your config.json file.");
+  }
+  
   const longContextThreshold = config.Router.longContextThreshold || 60000;
   if (tokenCount > longContextThreshold && config.Router.longContext) {
     log(
@@ -122,7 +126,10 @@ const getUseModel = async (req: any, tokenCount: number, config: any) => {
   ) {
     return config.Router.webSearch;
   }
-  return config.Router!.default;
+  if (!config.Router.default) {
+    throw new Error("Router.default configuration is missing. Please specify a default route in your config.json file.");
+  }
+  return config.Router.default;
 };
 
 export const router = async (req: any, _res: any, config: any) => {
@@ -150,7 +157,8 @@ export const router = async (req: any, _res: any, config: any) => {
     req.body.model = model;
   } catch (error: any) {
     log("Error in router middleware:", error.message);
-    req.body.model = config.Router!.default;
+    // Don't try to fallback if Router config is missing - just throw
+    throw error;
   }
   
   return;

@@ -81,7 +81,7 @@ async function run(options: RunOptions = {}) {
   const server = createServer({
     jsonPath: CONFIG_FILE,
     initialConfig: {
-      // ...config,
+      ...config,
       providers: config.Providers || config.providers,
       HOST: HOST,
       PORT: servicePort,

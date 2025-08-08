@@ -137,7 +137,7 @@ export function wrapFetch(): void {
     init?: RequestInit
   ): Promise<Response> {
     const url = extractUrl(input);
-    const context = tracingConfig.traceOutbound ? getTraceContext() : null;
+    const context = tracingConfig.enabled !== false ? getTraceContext() : null;
     const startTime = Date.now();
     
     // Trace request if applicable
