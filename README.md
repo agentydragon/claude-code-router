@@ -489,19 +489,72 @@ Compile to JavaScript before use, then reference the compiled `.js` file in conf
 **Available Built-in Transformers:**
 
 - `Anthropic`: If you use only the `Anthropic` transformer, it will preserve the original request and response parameters (you can use it to connect directly to an Anthropic endpoint).
-- `openai-reasoning`: Automatically applies compatibility fixes for OpenAI reasoning models (o1, o3). This transformer:
+- `openai-reasoning`: Automatically applies compatibility fixes for OpenAI reasoning models. This transformer:
   - Converts `max_tokens` to `max_completion_tokens` (required by reasoning models)
   - Forces `temperature` to 1 (reasoning models don't support temperature control)
-  - Automatically activates for models starting with `o1` or `o3`
-  - Example usage:
+  - Must be configured via `TransformerOptions` in config.json
+  - Supports exact model matches and regex patterns
+  - Configuration in config.json:
     ```json
     {
-      "name": "openai",
-      "api_base_url": "https://api.openai.com/v1/chat/completions",
-      "api_key": "sk-xxx",
-      "models": ["o1-preview", "o1-mini", "o3-mini"],
-      "transformer": {
-        "use": ["openai-reasoning"]
+      "TransformerOptions": {
+        "openai-reasoning": {
+          "patterns": [
+            "^o1-preview$",
+            "^o1-mini$",
+            "^o1$",
+            "^o3-mini$",
+            "^o3$"
+          ]
+        }
+      },
+      "Providers": [
+        {
+          "name": "openai",
+          "api_base_url": "https://api.openai.com/v1/chat/completions",
+          "api_key": "${OPENAI_API_KEY}",
+          "models": ["o1-preview", "o1-mini"],
+          "transformer": {
+            "use": ["openai-reasoning"]
+          }
+        }
+      ]
+    }
+    ```
+  - Custom configuration example:
+    ```javascript
+    // custom-reasoning-transformer.js
+    const { OpenAIReasoningTransformer } = require('./dist/transformers/OpenAIReasoningTransformer');
+    
+    class CustomReasoningTransformer extends OpenAIReasoningTransformer {
+      constructor() {
+        super({
+          models: [
+            'o1-preview',
+            'o1-mini',
+            'my-custom-reasoning-model'
+          ],
+          patterns: ['^o[13]-']
+        });
+        this.name = 'custom-reasoning';
+      }
+    }
+    
+    module.exports = CustomReasoningTransformer;
+    ```
+- `system-replace`: Performs search-replace operations on system messages. Must be configured via `TransformerOptions`. Useful for:
+  - Rebranding AI assistants (e.g., "Claude Code" → "AI Assistant")
+  - Adapting prompts for different providers
+  - Modifying system instructions dynamically
+  - Configuration example:
+    ```json
+    {
+      "TransformerOptions": {
+        "system-replace": {
+          "search": "Claude Code",
+          "replace": "AI Assistant",
+          "regex": false
+        }
       }
     }
     ```

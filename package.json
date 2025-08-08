@@ -7,7 +7,9 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "npx tsx test/tracing.test.ts",
+    "test": "npx tsx test/tracing.test.ts && npx tsx test/transformers.test.ts",
+    "test:tracing": "npx tsx test/tracing.test.ts",
+    "test:transformers": "npx tsx test/transformers.test.ts",
     "release": "npm run build && npm publish"
   },
   "keywords": [

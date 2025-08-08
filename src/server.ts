@@ -8,7 +8,7 @@ import { setupTracingHooks, maintainTraceContext } from "./middleware/tracing";
 import { initializeTracer } from "./utils/tracer";
 import { wrapFetch } from "./tracing/interceptor";
 import { OpenAIReasoningTransformer } from "./transformers/OpenAIReasoningTransformer";
-import { SystemMessageTransformer, ClaudeToOpenAITransformer } from "./transformers/SystemMessageTransformer";
+import { SystemMessageTransformer } from "./transformers/SystemMessageTransformer";
 
 export const createServer = (config: any): Server => {
   // Initialize tracer with config FIRST
@@ -28,26 +28,26 @@ export const createServer = (config: any): Server => {
   // Register built-in transformers
   try {
     if (server.app?._server?.transformerService) {
-      // Register OpenAI reasoning transformer
-      const reasoningTransformer = new OpenAIReasoningTransformer();
+      // Register OpenAI reasoning transformer with configuration
+      // Users must configure which models to apply it to
+      const reasoningConfig = actualConfig.TransformerOptions?.['openai-reasoning'] || {
+        patterns: []
+      };
+      const reasoningTransformer = new OpenAIReasoningTransformer(reasoningConfig);
       server.app._server.transformerService.registerTransformer(
         reasoningTransformer.name,
         reasoningTransformer
       );
       
-      // Register Claude to OpenAI transformer (example)
-      const claudeToOpenAI = new ClaudeToOpenAITransformer();
-      server.app._server.transformerService.registerTransformer(
-        claudeToOpenAI.name,
-        claudeToOpenAI
-      );
-      
-      // Register generic system-replace transformer
-      const systemReplace = new SystemMessageTransformer();
-      server.app._server.transformerService.registerTransformer(
-        systemReplace.name,
-        systemReplace
-      );
+      // Register generic system-replace transformer if configured
+      const systemReplaceConfig = actualConfig.TransformerOptions?.['system-replace'];
+      if (systemReplaceConfig && systemReplaceConfig.search && systemReplaceConfig.replace) {
+        const systemReplace = new SystemMessageTransformer(systemReplaceConfig);
+        server.app._server.transformerService.registerTransformer(
+          systemReplace.name,
+          systemReplace
+        );
+      }
     }
   } catch (error) {
     console.error('Failed to register built-in transformers:', error);

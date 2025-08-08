@@ -10,13 +10,16 @@ export class SystemMessageTransformer {
   private searchPattern: string | RegExp;
   private replaceValue: string;
   
-  constructor(options: { search?: string; replace?: string; regex?: boolean } = {}) {
-    // Default example: Replace "Claude Code" with "AI Assistant"
-    const search = options.search || 'Claude Code';
-    const replace = options.replace || 'AI Assistant';
+  constructor(options: { search: string; replace: string; regex?: boolean }) {
+    // No defaults - user must provide search and replace
+    if (!options.search || !options.replace) {
+      throw new Error('SystemMessageTransformer requires both search and replace options');
+    }
+    
+    const { search, replace, regex } = options;
     
     // Support regex patterns if specified
-    if (options.regex) {
+    if (regex) {
       this.searchPattern = new RegExp(search, 'g');
     } else {
       // Escape special regex characters for literal string search
@@ -89,15 +92,3 @@ export class SystemMessageTransformer {
   }
 }
 
-/**
- * Example: Pre-configured transformer for replacing "Claude Code" with "OpenAI Code"
- */
-export class ClaudeToOpenAITransformer extends SystemMessageTransformer {
-  constructor() {
-    super({
-      search: 'Claude Code',
-      replace: 'OpenAI Code'
-    });
-    this.name = 'claude-to-openai';
-  }
-}

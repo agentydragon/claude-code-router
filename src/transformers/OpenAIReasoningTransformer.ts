@@ -1,13 +1,21 @@
 /**
  * OpenAI Reasoning Models Compatibility Transformer
  * 
- * This transformer applies necessary parameter overrides for OpenAI reasoning models (o1, o3, etc.)
+ * This transformer applies necessary parameter overrides for OpenAI reasoning models
  * to ensure compatibility with their specific requirements:
  * - Converts max_tokens to max_completion_tokens
  * - Forces temperature to 1 (reasoning models don't support temperature control)
  */
 export class OpenAIReasoningTransformer {
   name = 'openai-reasoning';
+  private reasoningPatterns: RegExp[];
+  
+  constructor(options: { patterns?: string[] } = {}) {
+    // Convert string patterns to RegExp objects
+    // User must provide patterns - no defaults
+    const patterns = options.patterns || [];
+    this.reasoningPatterns = patterns.map(p => new RegExp(p));
+  }
   
   /**
    * Transform outbound request to OpenAI reasoning models
@@ -31,9 +39,8 @@ export class OpenAIReasoningTransformer {
     
     // Force temperature to 1
     // Reasoning models don't support temperature control
-    if ('temperature' in modifiedRequest) {
-      modifiedRequest.temperature = 1;
-    }
+    // Always set it, whether it was present or not
+    modifiedRequest.temperature = 1;
     
     return modifiedRequest;
   }
@@ -45,9 +52,7 @@ export class OpenAIReasoningTransformer {
     const model = request?.model;
     if (!model || typeof model !== 'string') return false;
     
-    // OpenAI reasoning models typically start with 'o1' or 'o3'
-    // This list can be expanded as new reasoning models are released
-    const reasoningModelPrefixes = ['o1-', 'o3-', 'o1', 'o3'];
-    return reasoningModelPrefixes.some(prefix => model.startsWith(prefix));
+    // Check pattern matches
+    return this.reasoningPatterns.some(pattern => pattern.test(model));
   }
 }
