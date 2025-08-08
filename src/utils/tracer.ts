@@ -43,16 +43,12 @@ export function initializeTracer(config: Record<string, unknown>) {
 
   if (!enabled) {
     // Create a no-op logger
-    tracerInstance = pino({
-      level: 'silent',
-    });
+    tracerInstance = pino({ level: 'silent' });
     return;
   }
 
   // Use provided transport config or default
   const transportConfig = transport || DEFAULT_TRACING_CONFIG.transport;
-  
-  console.log('Initializing tracer with transport:', JSON.stringify(transportConfig, null, 2));
   
   // TODO: Consider integrating with application logging system
   // For now, all trace events are logged at 'info' level

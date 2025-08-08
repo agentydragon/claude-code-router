@@ -1,6 +1,6 @@
-# End-to-End Tracing: Analysis, Options, Recommendation
+# Tracing: Options and Recommendation
 
-## Executive summary
+## Summary
 - Goal: capture inreq → outreq → outres → inres with accurate bodies and headers without forking @musistudio/llms
 - Current CCR-only approach works for correlation and timing, but OUTBOUND_REQUEST may reflect pre-transform content in some cases
 - Best path: keep CCR-only interception, harden body capture; if mismatch persists, add a minimal, optional hook in llms to emit “post-transform” request snapshots
@@ -64,14 +64,9 @@ Plausible causes observed in this codebase and configs:
 - Cons: Highest effort; new deps; config surface
 
 ## Recommendation
-1) Implement Option A immediately in CCR
-   - Deep-clone parsed bodies
-   - Support Request input body capture
-   - This likely resolves the mismatch for common cases and keeps single-repo changes
-2) If any mismatches remain, adopt Option C (minimal llms hook)
-   - Add a one-liner optional hook in llms’s sendUnifiedRequest to emit the exact pre-fetch snapshot
-   - CCR listens and logs as OUTBOUND_REQUEST; zero coupling beyond a global hook
-3) Consider Option D for long-term, transformer-aware tracing if you want complete stage visibility
+- Implement CCR-only hardening now (deep clone parsed bodies; support Request input body capture)
+- If mismatches remain, add an optional post-transform hook in @musistudio/llms to emit the pre-fetch snapshot (no tight coupling)
+- For long-term completeness, consider transformer-stage events or OTel spans in llms
 
 ## Verification plan
 - Unit: Extend tests to assert OUTBOUND_REQUEST body equals the stringified body in llms/src/utils/request.ts just before fetch

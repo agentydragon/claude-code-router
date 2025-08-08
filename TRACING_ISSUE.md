@@ -40,7 +40,7 @@ The issue is in `/src/tracing/interceptor.ts`. The fetch interceptor captures th
 - **Observability**: ⚠️ Degraded - can't see transformed requests in traces
 - **Debugging**: ⚠️ Harder - traces don't show what's actually sent to the API
 
-## Potential Fixes
+## Potential Fixes (current state + plan)
 
 ### Option 1: Deep Clone Before Tracing
 Ensure the traced body is a deep clone of the actual body being sent:
@@ -57,13 +57,13 @@ trace(TraceEvents.POST_TRANSFORM, context, { body: transformedBody });
 ```
 
 ### Option 3: Delay Trace Capture
-Move the OUTBOUND_REQUEST trace to happen after all transformations are complete, possibly by wrapping the fetch call differently.
+Move the OUTBOUND_REQUEST trace to happen after all transformations are complete, possibly by wrapping the fetch call differently. Current CCR-only fix implemented (deep clone + Request input capture). If mismatches persist, consider a minimal optional post-transform snapshot hook in @musistudio/llms right before fetch.
 
 ### Option 4: Transform-Aware Tracing
 Make the tracing system aware of the transformer pipeline and capture state at the right points.
 
 ## Workaround
-For now, use the transformer debug log (`/home/agentydragon/.claude-code-router/transformer-debug.log`) to verify transformations are working correctly. The actual API calls are using the transformed content even though traces don't show it.
+Until stream and post-transform snapshots are implemented, use the transformer debug log (`~/.claude-code-router/transformer-debug.log`) to verify transformations. Actual API calls use the transformed content even if traces show the original.
 
 ## Testing
 To verify the issue:

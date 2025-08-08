@@ -2,7 +2,7 @@
 
 ## Overview
 
-Comprehensive request/response tracing system for Claude Code Router that captures all HTTP traffic with correlation IDs, enabling debugging and monitoring of LLM API interactions.
+Request/response tracing system for Claude Code Router that captures HTTP traffic with correlation IDs, enabling debugging and monitoring of LLM API interactions.
 
 ## Problem Statement
 
@@ -166,19 +166,14 @@ Each event is logged as a JSON line:
 
 ## Future Enhancements
 
-### Streaming Response Support
-Currently, streaming responses are marked as `{ type: 'stream', message: 'Streaming response' }`. 
-
-**Future implementation should:**
-1. Create a pass-through stream that tees the response
-2. Buffer initial chunks for preview (first 1-5 chunks)
-3. Log streaming metadata:
-   - Total chunks received
-   - Total bytes transferred  
-   - Stream duration
-   - Sample of first/last chunks
-4. Handle backpressure to avoid memory issues
-5. Consider separate events for stream start/end
+### Plan: Correct handling for text/event-stream
+Current behavior returns a placeholder object and does not inspect SSE streams. Planned approach:
+- Detect text/event-stream and wrap the body with a tee/pass-through so the original consumer remains unaffected
+- Capture a bounded preview (first N events/bytes), event counts, byte totals, start/end timestamps, and duration
+- Emit two events: stream_start (headers, URL, preview buffer empty) and stream_end (final counters, preview sample)
+- Enforce caps (max events/bytes) to avoid memory growth; drop additional data beyond caps
+- Redact sensitive fields in streamed JSON payloads if present
+- Fall back to placeholder object when tracing is disabled or preview caps are 0
 
 ### Additional Improvements
 - **Metrics Export**: Prometheus-compatible metrics endpoint
@@ -199,6 +194,7 @@ The test verifies:
 - Correlation IDs match across events
 - Trace IDs are sequential (000, 001, 002, 003)
 - Proper cleanup and resource management
+- For streaming, add tests that assert stream_start/stream_end emission and bounded previews (when implemented)
 
 ## Production Deployment
 
