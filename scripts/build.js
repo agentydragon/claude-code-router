@@ -7,9 +7,9 @@ const fs = require('fs');
 console.log('Building Claude Code Router...');
 
 try {
-  // Build the main CLI application
+  // Build the main CLI application - keep pino & friends external
   console.log('Building CLI application...');
-  execSync('esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js', { stdio: 'inherit' });
+  execSync('esbuild src/cli.ts --bundle --platform=node --outfile=dist/cli.js --external:pino --external:pino-roll --external:thread-stream', { stdio: 'inherit' });
   
   // Copy the tiktoken WASM file
   console.log('Copying tiktoken WASM file...');

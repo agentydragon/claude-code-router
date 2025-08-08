@@ -13,19 +13,9 @@ export interface TraceContext {
 
 export interface TracingConfig {
   enabled: boolean;
-  level: string;
-  logDirectory: string;
-  rotation: string;
-  maxFileSize: string;
-  maxFiles: number;
-  compress: boolean | 'gzip';
-  maxBodySize: number;
-  previewSize: number;
+  transport?: any;  // pino.transport options
   traceOutbound?: boolean;
-  outboundUrlPatterns?: string[];
   sensitiveHeaders: string[];
-  sensitiveBodyKeys: string[];
-  retentionDays?: number;
 }
 
 export interface RequestWithContext extends FastifyRequest {

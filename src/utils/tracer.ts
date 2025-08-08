@@ -1,20 +1,19 @@
 import pino from 'pino';
-import * as rfs from 'rotating-file-stream';
 import { join } from 'path';
+import untildify from 'untildify';
 import { HOME_DIR } from '../constants';
 import type { TraceContext, TracingConfig, ErrorDetails } from '../tracing/types';
-import { getRotatingLogPath } from '../tracing/paths';
 
 // Default configuration for tracing
 const DEFAULT_TRACING_CONFIG = {
   enabled: true,
-  level: 'info',
-  rotation: '1h',
-  maxFileSize: '500M',
-  retentionDays: 7,
-  compress: true,
-  maxBodySize: 10000,
-  previewSize: 500,
+  transport: {
+    target: 'pino/file',
+    options: {
+      destination: '/tmp/ccr-trace.jsonl',
+      mkdir: true
+    }
+  },
   sensitiveHeaders: [
     'authorization',
     'x-api-key',
@@ -23,19 +22,9 @@ const DEFAULT_TRACING_CONFIG = {
     'x-auth-token',
     'x-access-token',
   ],
-  sensitiveBodyKeys: [
-    'password',
-    'secret',
-    'token',
-    'apikey',
-    'api_key',
-    'private_key',
-    'client_secret',
-  ],
 };
 
 let tracerInstance: pino.Logger | null = null;
-let streamInstance: rfs.RotatingFileStream | null = null;
 
 // Export the merged config
 export let tracingConfig: TracingConfig = DEFAULT_TRACING_CONFIG as TracingConfig;
@@ -46,16 +35,9 @@ export function initializeTracer(config: Record<string, unknown>) {
   tracingConfig = {
     ...DEFAULT_TRACING_CONFIG,
     ...(config.Tracing || {})
-  };
+  } as TracingConfig;
   
-  const {
-    enabled,
-    level,
-    rotation,
-    maxFileSize,
-    maxFiles,
-    compress,
-  } = tracingConfig;
+  const { enabled, transport } = tracingConfig;
 
   if (!enabled) {
     // Create a no-op logger
@@ -65,49 +47,22 @@ export function initializeTracer(config: Record<string, unknown>) {
     return;
   }
 
-  // Use configured logDirectory with path validation
-  const { resolve, isAbsolute } = require('path');
-  const configuredDir = tracingConfig.logDirectory;
+  // Use provided transport config or default
+  const transportConfig = transport || DEFAULT_TRACING_CONFIG.transport;
   
-  // Resolve to absolute path
-  const LOGS_BASE_DIR = isAbsolute(configuredDir) 
-    ? resolve(configuredDir)
-    : resolve(HOME_DIR, configuredDir);
+  console.log('Initializing tracer with transport:', JSON.stringify(transportConfig, null, 2));
   
-  // Security check: ensure log directory is within safe boundaries
-  // Allow logs in HOME_DIR or /tmp or /var/log
-  const safeRoots = [HOME_DIR, '/tmp', '/var/log'];
-  const isSafe = safeRoots.some(root => LOGS_BASE_DIR.startsWith(root));
-  
-  if (!isSafe) {
-    throw new Error(`Log directory must be within user home, /tmp, or /var/log. Got: ${LOGS_BASE_DIR}`);
-  }
-  
-  // Ensure the base directory exists
-  const fs = require('fs');
-  if (!fs.existsSync(LOGS_BASE_DIR)) {
-    fs.mkdirSync(LOGS_BASE_DIR, { recursive: true });
-  }
-
-  // Create rotating file stream with automatic compression
-  // Files will be like: 2025/01/07/trace-14.jsonl (and .gz when compressed)
-  streamInstance = rfs.createStream(getRotatingLogPath, {
-    interval: rotation,
-    path: LOGS_BASE_DIR,
-    compress,  // Pass through directly - rfs accepts false | 'gzip' | true
-    maxFiles,
-    size: maxFileSize,
-  });
-
+  // TODO: Consider integrating with application logging system
+  // For now, all trace events are logged at 'info' level
   tracerInstance = pino({
-    level,
+    level: 'info',  // Fixed at info since we only trace requests/responses
     timestamp: pino.stdTimeFunctions.isoTime,
     formatters: {
       level: (label) => {
         return { level: label };
       },
     },
-  }, streamInstance);
+  }, pino.transport(transportConfig));
   
 }
 
@@ -130,7 +85,7 @@ export const tracer = new Proxy({} as pino.Logger, {
 
 // Generate trace ID from correlation ID and sequence
 function generateTraceId(correlationId: string, sequence: number): string {
-  return `${correlationId}-${String(sequence).padStart(3, '0')}`;
+  return `${correlationId}-${String(sequence).padStart(5, '0')}`;
 }
 
 // Event type constants for consistency
@@ -205,11 +160,10 @@ export function trace(
 
 // Graceful shutdown
 export function shutdownTracer() {
-  if (streamInstance) {
-    streamInstance.end();
-    streamInstance = null;
+  if (tracerInstance) {
+    // Pino handles cleanup internally
+    tracerInstance = null;
   }
-  tracerInstance = null;
 }
 
 process.on('SIGTERM', () => {

@@ -29,13 +29,15 @@
     "nanoid": "^3.3.7",
     "openurl": "^1.1.1",
     "pino": "^8.17.2",
-    "rotating-file-stream": "^3.2.1",
+    "pino-roll": "^3.1.0",
     "tiktoken": "^1.0.21",
+    "untildify": "^5.0.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.15",
     "esbuild": "^0.25.1",
+    "esbuild-plugin-pino": "^2.2.2",
     "fastify": "^5.4.0",
     "shx": "^0.4.0",
     "typescript": "^5.8.2"

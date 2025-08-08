@@ -1,39 +1,11 @@
 import { getTraceContext, TraceContext } from './context';
 import { trace, TraceEvents, captureErrorDetails, tracingConfig } from '../utils/tracer';
-import { sanitizeHeaders, sanitizeBody } from '../tracing/sanitize';
+import { sanitizeHeaders } from '../tracing/sanitize';
 
 // Wrapper metadata
 const WRAPPER_SYMBOL = Symbol('fetchWrapped');
 let originalFetch: typeof global.fetch | null = null;
 
-/**
- * Determines if a URL should be traced based on configuration
- */
-function shouldTraceUrl(url: string): boolean {
-  // Check if outbound tracing is enabled at all
-  if (tracingConfig.traceOutbound === false) {
-    return false;
-  }
-  
-  // If no patterns configured, trace everything that looks like an API call
-  const patterns = tracingConfig.outboundUrlPatterns;
-  if (!patterns || patterns.length === 0) {
-    // Trace common API patterns by default
-    return url.includes('/v1/') || url.includes('/api/') || url.includes('/v1beta/');
-  }
-  
-  // Check if URL matches any configured pattern
-  return patterns.some((pattern: string) => {
-    // Support both substring matching and regex
-    if (pattern.startsWith('/') && pattern.endsWith('/')) {
-      // Regex pattern
-      const regex = new RegExp(pattern.slice(1, -1));
-      return regex.test(url);
-    }
-    // Simple substring match
-    return url.includes(pattern);
-  });
-}
 
 /**
  * Extracts URL string from various fetch input types
@@ -108,7 +80,7 @@ function traceRequest(
     url,
     method: init?.method,
     headers: sanitizeHeaders(init?.headers),
-    body: sanitizeBody(requestBody)
+    body: requestBody
   });
 }
 
@@ -126,7 +98,7 @@ async function traceResponse(
     statusCode: response.status,
     statusText: response.statusText,
     headers: sanitizeHeaders(Object.fromEntries(response.headers.entries())),
-    body: sanitizeBody(responseBody)
+    body: responseBody
   }, startTime);
 }
 
@@ -165,8 +137,7 @@ export function wrapFetch(): void {
     init?: RequestInit
   ): Promise<Response> {
     const url = extractUrl(input);
-    const shouldTrace = shouldTraceUrl(url);
-    const context = shouldTrace ? getTraceContext() : null;
+    const context = tracingConfig.traceOutbound ? getTraceContext() : null;
     const startTime = Date.now();
     
     // Trace request if applicable

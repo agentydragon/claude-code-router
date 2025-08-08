@@ -197,30 +197,25 @@ Add a `Tracing` section to your `config.json`:
 {
   "Tracing": {
     "enabled": true,              // Enable/disable tracing
-    "level": "info",               // Log level (debug, info, warn, error)
-    "logDirectory": "~/.claude-code-router/logs",  // Where to store logs
-    "rotation": "1h",              // Rotate logs hourly (1h, 1d, etc.)
-    "maxFiles": 168,               // Keep 168 files (7 days * 24 hours)
-    "maxFileSize": "500M",         // Max size per log file
-    "compress": true,              // Compress rotated logs with gzip
-    "maxBodySize": 10000,          // Max body size to log (bytes)
-    "previewSize": 500,            // Preview size for truncated bodies
-    "traceOutbound": true,         // Trace outbound requests
-    "outboundUrlPatterns": [       // URL patterns to trace (optional)
-      "/v1/",
-      "/api/",
-      "/v1beta/"
-    ],
-    "sensitiveHeaders": [          // Headers to redact
+    "transport": {                // Pino transport configuration
+      "target": "pino-roll",      // Use pino-roll for rotation
+      "options": {
+        "file": "/tmp/ccr/trace", // Base filename
+        "frequency": "hourly",    // Rotate hourly or daily
+        "size": "100m",           // Max file size before rotation
+        "limit": {
+          "count": 168            // Keep 168 files (7 days * 24 hours)
+        },
+        "dateFormat": "yyyy-MM-dd-HH", // Date format in filename
+        "extension": ".jsonl",    // File extension
+        "gzip": true             // Compress rotated files
+      }
+    },
+    "traceOutbound": true,        // Trace outbound requests
+    "sensitiveHeaders": [         // Headers to redact
       "authorization",
       "x-api-key",
       "api-key"
-    ],
-    "sensitiveBodyKeys": [         // Body fields to redact
-      "password",
-      "secret",
-      "token",
-      "apikey"
     ]
   }
 }
@@ -512,7 +507,7 @@ Compile to JavaScript before use, then reference the compiled `.js` file in conf
         {
           "name": "openai",
           "api_base_url": "https://api.openai.com/v1/chat/completions",
-          "api_key": "${OPENAI_API_KEY}",
+          "api_key": "sk-your-openai-api-key-here",
           "models": ["o1-preview", "o1-mini"],
           "transformer": {
             "use": ["openai-reasoning"]

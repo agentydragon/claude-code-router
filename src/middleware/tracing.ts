@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { TraceEvents, trace, captureErrorDetails } from '../utils/tracer';
 import { createTraceContext, getTraceContext, traceStorage } from '../tracing/context';
-import { sanitizeHeaders, sanitizeBody } from '../tracing/sanitize';
+import { sanitizeHeaders } from '../tracing/sanitize';
 import type { TraceContext, RequestWithContext } from '../tracing/types';
 
 /**
@@ -44,7 +44,7 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
       method: req.method,
       url: req.url,
       headers: sanitizeHeaders(req.headers),
-      body: sanitizeBody(req.body),
+      body: req.body,
       ip: req.ip
     });
   });
@@ -60,7 +60,7 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
     trace(TraceEvents.INBOUND_RESPONSE, context, {
       statusCode: reply.statusCode,
       headers: sanitizeHeaders(reply.getHeaders()),
-      body: sanitizeBody(payload)
+      body: payload
     }, startTime);
     
     return payload;
@@ -94,4 +94,4 @@ export async function maintainTraceContext(req: FastifyRequest, _reply: FastifyR
 }
 
 // Re-export for backward compatibility
-export { sanitizeHeaders, sanitizeBody } from '../tracing/sanitize';
+export { sanitizeHeaders } from '../tracing/sanitize';
