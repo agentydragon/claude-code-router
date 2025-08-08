@@ -7,9 +7,9 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "npx tsx test/tracing.test.ts && npx tsx test/transformers.test.ts",
-    "test:tracing": "npx tsx test/tracing.test.ts",
-    "test:transformers": "npx tsx test/transformers.test.ts",
+    "test": "mocha test/*.test.ts --require tsx",
+    "test:tracing": "mocha test/tracing.test.ts --require tsx",
+    "test:transformers": "mocha test/transformers.test.ts --require tsx",
     "release": "npm run build && npm publish"
   },
   "keywords": [
@@ -35,11 +35,14 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^24.0.15",
     "esbuild": "^0.25.1",
     "esbuild-plugin-pino": "^2.2.2",
     "fastify": "^5.4.0",
+    "mocha": "^11.7.1",
     "shx": "^0.4.0",
+    "tsx": "^4.20.3",
     "typescript": "^5.8.2"
   },
   "publishConfig": {

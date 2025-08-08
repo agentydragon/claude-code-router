@@ -18,21 +18,25 @@ export class OpenAIReasoningTransformer {
   }
   
   /**
-   * Transform outbound request to OpenAI reasoning models
+   * Transform inbound request (called by provider transformers)
    * Applies necessary parameter overrides for compatibility
    */
-  transformRequestOut(request: any): any {
+  transformRequestIn(request: any): any {
+    console.log('OpenAIReasoningTransformer.transformRequestIn: checking model', request?.model);
     // Only apply transformations if this looks like a reasoning model request
     if (!this.isReasoningModel(request)) {
+      console.log('OpenAIReasoningTransformer: not a reasoning model');
       return request;
     }
     
+    console.log('OpenAIReasoningTransformer: transforming request for', request.model);
     // Clone the request to avoid mutating the original
     const modifiedRequest = { ...request };
     
     // Convert max_tokens to max_completion_tokens
     // Reasoning models use max_completion_tokens instead of max_tokens
     if ('max_tokens' in modifiedRequest) {
+      console.log('OpenAIReasoningTransformer: converting max_tokens to max_completion_tokens');
       modifiedRequest.max_completion_tokens = modifiedRequest.max_tokens;
       delete modifiedRequest.max_tokens;
     }
@@ -43,6 +47,14 @@ export class OpenAIReasoningTransformer {
     modifiedRequest.temperature = 1;
     
     return modifiedRequest;
+  }
+  
+  /**
+   * Transform outbound request (for endpoint transformers)
+   * Just delegates to transformRequestIn for consistency
+   */
+  transformRequestOut(request: any): any {
+    return this.transformRequestIn(request);
   }
   
   /**

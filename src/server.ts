@@ -57,6 +57,34 @@ export const createServer = (config: any): Server => {
     // Setup all tracing hooks properly at the server level
     setupTracingHooks(server.app);
   }
+  
+  // Add auth and router middleware for standalone usage (e.g., tests)
+  const { apiKeyAuth } = require('./middleware/auth');
+  const { router } = require('./utils/router');
+  
+  server.app.addHook("preHandler", async (req, reply) => {
+    return new Promise((resolve, reject) => {
+      const done = (err?: Error) => {
+        if (err) reject(err);
+        else resolve();
+      };
+      apiKeyAuth(actualConfig)(req, reply, done).catch(reject);
+    });
+  });
+  
+  server.app.addHook("preHandler", async (req, reply) => {
+    if(req.url.startsWith("/v1/messages")) {
+      const context = (req as any).traceContext;
+      if (context) {
+        const { runWithTraceContext } = require('./tracing/context');
+        await runWithTraceContext(context, async () => {
+          await router(req, reply, actualConfig);
+        });
+      } else {
+        await router(req, reply, actualConfig);
+      }
+    }
+  });
 
   // Add endpoint to read config.json with access control
   server.app.get("/api/config", async (req, reply) => {
