@@ -109,8 +109,13 @@ describe('Tracing Integration Test', function() {
           enabled: true,
           traceOutbound: true,  // Enable outbound request tracing
           transport: {
-            target: 'pino/file',
-            options: { destination: join(TEST_LOGS_DIR, 'trace.jsonl'), mkdir: true }
+            target: 'pino-roll',
+            options: {
+              file: join(TEST_LOGS_DIR, 'trace'),
+              frequency: 'daily',
+              size: '10M',
+              mkdir: true
+            }
           },
           maxBodySize: 5000,
           previewSize: 200
@@ -174,8 +179,13 @@ describe('Tracing Integration Test', function() {
     const { shutdownTracer } = require('../src/utils/tracer');
     shutdownTracer();
 
-    // Read and verify logs
-    const logFile = join(TEST_LOGS_DIR, 'trace.jsonl');
+    // Read and verify logs (pino-roll creates numbered files, starting with .1)
+    let logFile = join(TEST_LOGS_DIR, 'trace.1');
+    
+    // Fallback to base name if .1 doesn't exist
+    if (!existsSync(logFile)) {
+      logFile = join(TEST_LOGS_DIR, 'trace');
+    }
     
     if (!existsSync(logFile)) {
       throw new Error(`Log file not found: ${logFile}`);

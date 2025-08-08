@@ -4,13 +4,15 @@ import untildify from 'untildify';
 import { HOME_DIR } from '../constants';
 import type { TraceContext, TracingConfig, ErrorDetails } from '../tracing/types';
 
-// Default configuration for tracing
+// Default configuration for tracing with log rotation
 const DEFAULT_TRACING_CONFIG = {
   enabled: true,
   transport: {
-    target: 'pino/file',
+    target: 'pino-roll',
     options: {
-      destination: '/tmp/ccr-trace.jsonl',
+      file: join(HOME_DIR, 'logs', 'trace'),
+      frequency: 'hourly',
+      size: '100M',
       mkdir: true
     }
   },
