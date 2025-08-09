@@ -7,7 +7,6 @@ import fastifyStatic from "@fastify/static";
 import { setupTracingHooks, maintainTraceContext } from "./middleware/tracing";
 import { initializeTracer } from "./utils/tracer";
 import { wrapFetch } from "./tracing/interceptor";
-import { OpenAIReasoningTransformer } from "./transformers/OpenAIReasoningTransformer";
 
 export const createServer = (config: any): Server => {
   // Initialize tracer with config FIRST
@@ -24,23 +23,6 @@ export const createServer = (config: any): Server => {
   // Create server
   const server = new Server(config);
   
-  // Register built-in transformers
-  try {
-    if (server.app?._server?.transformerService) {
-      // Register OpenAI reasoning transformer with configuration
-      // Users must configure which models to apply it to
-      const reasoningConfig = actualConfig.TransformerOptions?.['openai-reasoning'] || {
-        patterns: []
-      };
-      const reasoningTransformer = new OpenAIReasoningTransformer(reasoningConfig);
-      server.app._server.transformerService.registerTransformer(
-        reasoningTransformer.name,
-        reasoningTransformer
-      );
-    }
-  } catch (error) {
-    console.error('Failed to register built-in transformers:', error);
-  }
 
   if (tracingEnabled) {
     // Setup all tracing hooks properly at the server level
