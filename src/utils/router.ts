@@ -17,15 +17,15 @@ const calculateTokenCount = (
   if (Array.isArray(messages)) {
     messages.forEach((message) => {
       if (typeof message.content === "string") {
-        tokenCount += enc.encode(message.content).length;
+        tokenCount += enc.encode_ordinary(message.content).length;
       } else if (Array.isArray(message.content)) {
         message.content.forEach((contentPart: any) => {
           if (contentPart.type === "text") {
-            tokenCount += enc.encode(contentPart.text).length;
+            tokenCount += enc.encode_ordinary(contentPart.text).length;
           } else if (contentPart.type === "tool_use") {
-            tokenCount += enc.encode(JSON.stringify(contentPart.input)).length;
+            tokenCount += enc.encode_ordinary(JSON.stringify(contentPart.input)).length;
           } else if (contentPart.type === "tool_result") {
-            tokenCount += enc.encode(
+            tokenCount += enc.encode_ordinary(
               typeof contentPart.content === "string"
                 ? contentPart.content
                 : JSON.stringify(contentPart.content)
@@ -36,15 +36,15 @@ const calculateTokenCount = (
     });
   }
   if (typeof system === "string") {
-    tokenCount += enc.encode(system).length;
+    tokenCount += enc.encode_ordinary(system).length;
   } else if (Array.isArray(system)) {
     system.forEach((item: any) => {
       if (item.type !== "text") return;
       if (typeof item.text === "string") {
-        tokenCount += enc.encode(item.text).length;
+        tokenCount += enc.encode_ordinary(item.text).length;
       } else if (Array.isArray(item.text)) {
         item.text.forEach((textPart: any) => {
-          tokenCount += enc.encode(textPart || "").length;
+          tokenCount += enc.encode_ordinary(textPart || "").length;
         });
       }
     });
@@ -52,10 +52,10 @@ const calculateTokenCount = (
   if (tools) {
     tools.forEach((tool: Tool) => {
       if (tool.description) {
-        tokenCount += enc.encode(tool.name + tool.description).length;
+        tokenCount += enc.encode_ordinary(tool.name + tool.description).length;
       }
       if (tool.input_schema) {
-        tokenCount += enc.encode(JSON.stringify(tool.input_schema)).length;
+        tokenCount += enc.encode_ordinary(JSON.stringify(tool.input_schema)).length;
       }
     });
   }

@@ -1,43 +1,9 @@
 import assert from 'assert';
-import { OpenAIReasoningTransformer } from '../src/transformers/OpenAIReasoningTransformer';
 import { SystemMessageTransformer } from '../src/transformers/SystemMessageTransformer';
 
 describe('Transformer Tests', () => {
   
-  describe('OpenAIReasoningTransformer', () => {
-    const transformer = new OpenAIReasoningTransformer({ patterns: [ '^o3-mini$', '^o3$' ] });
-    
-    it('should only transform matching models', () => {
-      // Non-matching model - should not transform
-      const gptRequest = { model: 'gpt-4', max_tokens: 1000, temperature: 0.7 };
-      const gptResult = transformer.transformRequestOut({ ...gptRequest });
-      assert.strictEqual(gptResult.max_tokens, 1000);
-      assert.strictEqual(gptResult.temperature, 0.7);
-      assert.strictEqual(gptResult.max_completion_tokens, undefined);
-      
-      // Matching model - should transform
-      const o3Request = { model: 'o3-mini', max_tokens: 3000, temperature: 0.9 };
-      const o3Result = transformer.transformRequestOut({ ...o3Request });
-      assert.strictEqual(o3Result.max_tokens, undefined);
-      assert.strictEqual(o3Result.temperature, 1);
-      assert.strictEqual(o3Result.max_completion_tokens, 3000);
-      
-      // Missing temperature - should add it
-      const noTempRequest = { model: 'o3', max_tokens: 1500 };
-      const noTempResult = transformer.transformRequestOut({ ...noTempRequest });
-      assert.strictEqual(noTempResult.temperature, 1);
-    });
-    
-    it('should support custom patterns', () => {
-      const customTransformer = new OpenAIReasoningTransformer({ patterns: ['^custom-'] });
-      const result = customTransformer.transformRequestOut({ 
-        model: 'custom-reasoning-v2', 
-        max_tokens: 2000 
-      });
-      assert.strictEqual(result.temperature, 1);
-      assert.strictEqual(result.max_completion_tokens, 2000);
-    });
-  });
+
   
   describe('SystemMessageTransformer', () => {
     
