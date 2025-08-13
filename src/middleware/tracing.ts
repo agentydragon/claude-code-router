@@ -67,17 +67,27 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
   });
   
   // Log errors
-  fastify.addHook('onError', async (req, _reply, error) => {
+  fastify.addHook('onError', async (req, reply, error) => {
     const context = getTraceContext();
     const reqWithContext = req as RequestWithContext;
     const startTime = reqWithContext.traceStartTime;
-    
-    if (!context || !startTime) return;
-    
-    trace(TraceEvents.INBOUND_ERROR, context, {
-      error: captureErrorDetails(error),
-      statusCode: _reply.statusCode
-    }, startTime);
+
+    if (context && startTime) {
+      trace(TraceEvents.INBOUND_ERROR, context, {
+        error: captureErrorDetails(error),
+        statusCode: reply.statusCode
+      }, startTime);
+    }
+
+    const ct = String(reply.getHeader('content-type') || '');
+    const isSse = ct.includes('text/event-stream');
+    if (isSse && !(reply as any).sent && !(reply.raw as any).headersSent) {
+      reply.header('Content-Type', 'text/event-stream');
+      reply.header('Cache-Control', 'no-cache');
+      reply.header('Connection', 'keep-alive');
+      const data = JSON.stringify({ message: (error as any)?.message || 'stream error', code: (error as any)?.code || 'stream_error' });
+      return reply.send(`event: error\ndata: ${data}\n\n`);
+    }
   });
 }
 
