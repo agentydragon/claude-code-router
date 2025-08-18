@@ -79,14 +79,33 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
       }, startTime);
     }
 
-    const ct = String(reply.getHeader('content-type') || '');
-    const isSse = ct.includes('text/event-stream');
-    if (isSse && !(reply as any).sent && !(reply.raw as any).headersSent) {
+    // If the client has already aborted, don't try to write a response
+    if ((req.raw as any)?.aborted || (reply.raw as any)?.writableEnded) {
+      return;
+    }
+
+    // Detect SSE intent either by response header, request Accept, or known streaming flag
+    const currentCt = String(reply.getHeader('content-type') || '');
+    const wantsSse = currentCt.includes('text/event-stream')
+      || String((req.headers['accept'] || '')).includes('text/event-stream')
+      || (req.url?.includes('/v1/messages') && (req as any).body?.stream === true);
+
+    if (wantsSse && !(reply as any).sent && !(reply.raw as any).headersSent) {
       reply.header('Content-Type', 'text/event-stream');
       reply.header('Cache-Control', 'no-cache');
       reply.header('Connection', 'keep-alive');
       const data = JSON.stringify({ message: (error as any)?.message || 'stream error', code: (error as any)?.code || 'stream_error' });
       return reply.send(`event: error\ndata: ${data}\n\n`);
+    }
+
+    // Fallback: always send string/Buffer, never an object (avoids FST_ERR_REP_INVALID_PAYLOAD_TYPE)
+    if (!(reply as any).sent && !(reply.raw as any).headersSent) {
+      reply.header('Content-Type', 'application/json; charset=utf-8');
+      const payload = JSON.stringify({
+        error: (error as any)?.message || 'Internal Server Error',
+        code: (error as any)?.code || 'internal_error'
+      });
+      return reply.send(payload);
     }
   });
 }
