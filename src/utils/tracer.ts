@@ -116,17 +116,22 @@ export const TraceEvents = {
 
 // Helper function to capture error details
 export function captureErrorDetails(error: unknown): ErrorDetails {
-  return {
-    message: error instanceof Error ? error.message : String(error),
-    name: error instanceof Error ? error.name : 'UnknownError',
-    stack: error instanceof Error ? error.stack : null,
-    code: error?.code || null,
-    statusCode: error?.statusCode || null,
-    response: error?.response || null,
-    errno: error?.errno || null,
-    syscall: error?.syscall || null,
-    path: error?.path || null,
+  const e: any = error as any;
+  const cause: any = e?.cause;
+
+  const details: ErrorDetails = {
+    message: e instanceof Error ? e.message : String(error),
+    name: e instanceof Error ? e.name : 'UnknownError',
+    stack: (e && typeof e.stack === 'string') ? e.stack : (cause && typeof cause.stack === 'string') ? cause.stack : null,
+    code: e?.code || cause?.code || null,
+    statusCode: e?.statusCode || cause?.statusCode || null,
+    response: e?.response || cause?.response || null,
+    errno: e?.errno || cause?.errno || null,
+    syscall: e?.syscall || cause?.syscall || null,
+    path: e?.path || cause?.path || null,
   };
+
+  return details;
 }
 
 // Helper function to log with context
