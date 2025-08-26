@@ -63,6 +63,29 @@ export function setupTracingHooks(fastify: FastifyInstance): void {
       body: payload
     }, startTime);
     
+    // Guard: Fastify expects string/Buffer at final send. If an object slips through (e.g., SSE cancel edge), coerce.
+    const ct = String(reply.getHeader('content-type') || '');
+    if (payload !== null && typeof payload === 'object' && !Buffer.isBuffer(payload)) {
+      // Record a diagnostic trace to locate the source
+      trace(TraceEvents.INBOUND_ERROR, context, {
+        error: { message: 'coerced_object_payload_at_onSend', type: 'payload_type_guard' },
+        statusCode: reply.statusCode,
+        contentType: ct
+      }, startTime);
+
+      if (ct.includes('text/event-stream')) {
+        const data = JSON.stringify(payload);
+        return `event: error\ndata: ${data}\n\n`;
+      } else {
+        reply.header('Content-Type', 'application/json; charset=utf-8');
+        try {
+          return JSON.stringify(payload);
+        } catch {
+          return String(payload);
+        }
+      }
+    }
+    
     return payload;
   });
   
