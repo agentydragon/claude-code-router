@@ -131,8 +131,41 @@ export const writeConfigFile = async (config: any) => {
   await fs.writeFile(CONFIG_FILE, configWithComment);
 };
 
+
+// Merge environment variables into config Providers for convenience.
+// If OPENAI_API_KEY is set, ensure an 'openai' provider exists and carry the key.
+const hydrateProvidersFromEnv = (config: any) => {
+  try {
+    const envKey = process.env.OPENAI_API_KEY || (config as any)?.OPENAI_API_KEY;
+    const envBase = process.env.OPENAI_BASE_URL || (config as any)?.OPENAI_BASE_URL;
+    const envModel = process.env.OPENAI_MODEL || (config as any)?.OPENAI_MODEL;
+    if (!envKey) return config;
+    const upsert = (arr: any[]) => {
+      const idx = arr.findIndex((p: any) => String(p?.name || '').toLowerCase() === 'openai');
+      const api_base_url = envBase || arr[idx]?.api_base_url || 'https://api.openai.com/v1/chat/completions';
+      const models = (arr[idx]?.models && arr[idx].models.length > 0) ? arr[idx].models : [envModel || 'gpt-4o-mini'];
+      const next = { ...(arr[idx] || {}), name: 'openai', api_base_url, api_key: envKey, models };
+      if (idx >= 0) arr[idx] = next; else arr.unshift(next);
+    };
+    if (Array.isArray((config as any)?.Providers)) upsert((config as any).Providers);
+    if (Array.isArray((config as any)?.providers)) upsert((config as any).providers);
+    if (!(config as any)?.Providers && !(config as any)?.providers) {
+      (config as any).Providers = [{
+        name: 'openai',
+        api_base_url: envBase || 'https://api.openai.com/v1/chat/completions',
+        api_key: envKey,
+        models: [envModel || 'gpt-4o-mini'],
+      }];
+    }
+  } catch (e) {
+    console.warn('OPENAI_API_KEY env merge failed:', (e as any)?.message || e);
+  }
+  return config;
+};
+
 export const initConfig = async () => {
-  const config = await readConfigFile();
+  const fileConfig = await readConfigFile();
+  const config = hydrateProvidersFromEnv(fileConfig);
   Object.assign(process.env, config);
   return config;
 };
