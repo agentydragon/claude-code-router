@@ -22,9 +22,38 @@ export const createServer = (config: any): Server => {
 
   // Create server
   const server = new Server(config);
-  
-
-  if (tracingEnabled) {
+  // Auto-register providers from initialConfig/env when Fastify is ready
+  try {
+    server.app.addHook("onReady", async () => {
+      try {
+        const envMap: Record<string,string> = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY', deepseek: 'DEEPSEEK_API_KEY' };
+        const list: any[] = Array.isArray(actualConfig.providers) ? actualConfig.providers : (Array.isArray(actualConfig.Providers) ? actualConfig.Providers : []);
+        const svc = (server as any).app._server && (server as any).app._server.providerService;
+        if (!svc) {
+          console.error('Provider auto-registration failed: providerService not available onReady');
+          return;
+        }
+        for (const p of (list || [])) {
+          if (!p) continue;
+          const name = String(p.name || '');
+          if (!name) continue;
+          const lname = name.toLowerCase();
+          const baseUrl = p.api_base_url || p.baseUrl || p.apiBaseUrl || '';
+          const apiKey = p.api_key || (process as any).env[envMap[lname]] || (process as any).env[(name.toUpperCase()) + '_API_KEY'] || '';
+          const models = Array.isArray(p.models) ? p.models : [];
+          const transformer = p.transformer || {};
+          if (!svc.getProvider(name)) {
+            svc.registerProvider({ name, baseUrl, apiKey, models, transformer });
+          }
+        }
+      } catch (e: any) {
+        console.error('Provider auto-registration failed:', e?.stack || e?.message || e);
+      }
+    });
+  } catch (e: any) {
+    console.error('Provider auto-registration hook error:', e?.stack || e?.message || e);
+  }
+if (tracingEnabled) {
     // Setup all tracing hooks properly at the server level
     setupTracingHooks(server.app);
   }
