@@ -4,6 +4,7 @@ let
   cfg = config.programs.claudeCodeRouter;
   json = pkgs.formats.json {};
   homeDir = config.home.homeDirectory;
+  defaultPackage = pkgs.callPackage ../pkgs/ccr-cli.nix { };
 
   # Default to this repository's transformers directory
   defaultTransformersSrc = ../../transformers;
@@ -48,6 +49,15 @@ let
 in {
   options.programs.claudeCodeRouter = with lib; {
     enable = mkEnableOption "claude-code-router files and config";
+
+    package = mkOption {
+      type = types.package;
+      default = defaultPackage;
+      description = ''
+        Package providing the `ccr` CLI. Defaults to the package exported by
+        this flake for the current system.
+      '';
+    };
 
     # Source directory for the transformer JS files.
     transformersSrc = mkOption {
@@ -118,6 +128,8 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    home.packages = [ cfg.package ];
+
     # Install transformers and generated config.json
     home.file.".claude-code-router/transformers".source = "${transformersPkg}/transformers";
     home.file.".claude-code-router/config.json".source = configJson;

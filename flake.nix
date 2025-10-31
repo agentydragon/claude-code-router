@@ -24,40 +24,10 @@
       packages = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
-          lib = pkgs.lib;
-          pnpm = pkgs.pnpm;
+          ccrCli = pkgs.callPackage ./nix/pkgs/ccr-cli.nix { };
         in {
-          # Build the CLI bundle during the derivation using pnpm.
-          ccr-cli = pkgs.stdenv.mkDerivation {
-            pname = "ccr-cli";
-            version = "unstable";
-            src = ./.;
-            pnpmDeps = pnpm.fetchDeps {
-              pname = "ccr-cli";
-              version = "unstable";
-              src = ./.;
-              fetcherVersion = 1;
-              hash = "sha256-RcnBO6vOfam80HpDorQ06y5wyn2+1Td9lwzmJXJ+lrY=";
-            };
-            nativeBuildInputs = [
-              pkgs.nodejs
-              pnpm.configHook
-              pkgs.makeWrapper
-            ];
-            buildPhase = ''
-              runHook preBuild
-              export CCR_SKIP_UI=1
-              pnpm run build
-              runHook postBuild
-            '';
-            installPhase = ''
-              mkdir -p $out/bin $out/share/ccr
-              cp -r dist $out/share/ccr/dist
-              makeWrapper ${pkgs.nodejs}/bin/node $out/bin/ccr \
-                --add-flags "$out/share/ccr/dist/cli.js"
-            '';
-          };
-          default = self.packages.${system}.ccr-cli;
+          ccr-cli = ccrCli;
+          default = ccrCli;
         });
 
       apps = forAllSystems (system: {
