@@ -22,14 +22,33 @@
       };
 
       packages = forAllSystems (system:
-        let pkgs = import nixpkgs { inherit system; };
+        let
+          pkgs = import nixpkgs { inherit system; };
+          lib = pkgs.lib;
+          pnpm = pkgs.pnpm;
         in {
-          # Lightweight package that wraps Node to run the built CLI in dist/
-          ccr-cli = pkgs.stdenvNoCC.mkDerivation {
+          # Build the CLI bundle during the derivation using pnpm.
+          ccr-cli = pkgs.stdenv.mkDerivation {
             pname = "ccr-cli";
             version = "unstable";
             src = ./.;
-            nativeBuildInputs = [ pkgs.makeWrapper ];
+            pnpmDeps = pnpm.fetchDeps {
+              pname = "ccr-cli";
+              version = "unstable";
+              src = ./.;
+              fetcherVersion = 1;
+              hash = lib.fakeHash;
+            };
+            nativeBuildInputs = [
+              pkgs.nodejs
+              pnpm.configHook
+              pkgs.makeWrapper
+            ];
+            buildPhase = ''
+              runHook preBuild
+              pnpm run build
+              runHook postBuild
+            '';
             installPhase = ''
               mkdir -p $out/bin $out/share/ccr
               cp -r dist $out/share/ccr/dist
