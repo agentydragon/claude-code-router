@@ -37,7 +37,7 @@
               version = "unstable";
               src = ./.;
               fetcherVersion = 1;
-              hash = lib.fakeHash;
+              hash = "sha256-RcnBO6vOfam80HpDorQ06y5wyn2+1Td9lwzmJXJ+lrY=";
             };
             nativeBuildInputs = [
               pkgs.nodejs
@@ -46,6 +46,7 @@
             ];
             buildPhase = ''
               runHook preBuild
+              export CCR_SKIP_UI=1
               pnpm run build
               runHook postBuild
             '';
